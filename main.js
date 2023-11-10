@@ -55,20 +55,8 @@ function processImage(canvas_context, image_width, image_height){
     0, 0, image_width, image_height
   );
 
-  //for(let y = 0; y < image_height; y++){
-  //  for(let x = 0; x < image_width; x++){
-  //    if(x % 8 === 0){
-  //      const pixel = getPixelFromImageData(les_donnees_d_image, x, y);
-  //      pixel[0] = 255;
-  //      //pixel[1] = 0;
-  //      //pixel[2] = 0;
-  //      //pixel[3] = 0;
-  //      setPixelForImageData(les_donnees_d_image, x, y, pixel);
-  //    }
-  //  }
-  //}
-
-  const la_image_filtre = applyGaussianFilter(les_donnees_d_image, 21);
+  const s = 20;
+  const la_image_filtre = applyGaussianFilter(les_donnees_d_image, 2 * Math.PI * s, s);
 
   canvas_context.putImageData(la_image_filtre, 0, 0);
 }
@@ -130,29 +118,19 @@ function setPixelForImageData(image_data, x, y, pixel){
 
 function applyGaussianFilter(
   input_image_data, 
-  //kernel_size,
-  le_sigma
+  kernel_size,
+  sigma
 ){
   //Build the Gaussian kernel. Based on this lecture from `First Principles
   //of Computer Vision`, [https://youtu.be/-LD9MxBUFQo?si=QZVE3I0Cbp1teSs-]
   //the kernel_size and sigma values are related based on this rule of 
   //thumb : `kernel_size ~= 2 * PI * sigma`. This lets us capture most 
   //of the important information about the Gaussian function.
-  //
-  //A 1-dimensional Gaussian function can be obtained from the following:
-  //g(x) = ( e^((-x^2)/(2*sigma^2)) ) / sqrt(2 * PI) * sigma
-  //according to this wikipedia page: [https://en.wikipedia.org/wiki/Gaussian_filter#definition]
-  //
-  //sigma can be obtained by rearranging the rule of thumb earlier:
-  //kernel_size / (2 * PI) ~= sigma
-  //
+
   //We also want to center the Gaussian function so we offset it by using
   // x - floor(kernel_size / 2).
-  const kernel_size = 2 * Math.PI * le_sigma;
   const la_quantite_de_deplacement = Math.floor(kernel_size / 2);
   let la_fenetre = [];
-  //const le_sigma = kernel_size / (2 * Math.PI);
-  //const le_sigma = 5;
   let la_somme = 0;
   for(let k = 0; k < kernel_size; k++){
     //Calculate the displaced x value so we have the Gaussian peak in
@@ -160,9 +138,9 @@ function applyGaussianFilter(
     const x = k - la_quantite_de_deplacement;
 
     //Sample the Gaussian g(x) function with the displaced x value and
-    //the sigma value.
-    //const g_x = (1 / (2 * Math.PI * (le_sigma * le_sigma))) * Math.pow(Math.E, -1 * ((x * x) / (2 * (le_sigma * le_sigma))) )
-    const g_x = (1 / (Math.sqrt(2 * Math.PI) * le_sigma)) * Math.pow(Math.E, -1 * ((x * x) / (2 * (le_sigma * le_sigma))) )
+    //the sigma value. The Gaussian function can be obtained from:
+    //[https://staff.fnwi.uva.nl/r.vandenboomgaard/IPCV20172018/LectureNotes/IP/LocalStructure/GaussianDerivatives.html]
+    const g_x = (1 / (Math.sqrt(2 * Math.PI) * sigma)) * Math.exp(-1 * ((x * x) / (2 * (sigma * sigma))));
 
     //Add the sampled Gaussian to the kernel (window).
     la_fenetre.push(g_x);
@@ -176,10 +154,9 @@ function applyGaussianFilter(
   //will add up to 1.
   la_fenetre = la_fenetre.map(e => e / la_somme);
 
-
-  //First pass, convolve the generated 1-D Gaussian kernel with the
-  //input image through the horizontal axis. This takes advantage of
-  //the fact that the Gaussian filter can be separated into 2 operations.
+  //First pass, convolve image along the rows using the 1-D Gaussian
+  //kernel. This takes advantages of the fact that the Gaussian filter
+  //can be separated into 2 operations.
   const i1 = new ImageData(
     input_image_data.data, 
     input_image_data.width, 
@@ -190,7 +167,7 @@ function applyGaussianFilter(
       const le_resultat = [0, 0, 0, 0];
       for(let k = 0; k < kernel_size; k++){
         const le_displacement = k - Math.floor(kernel_size / 2);
-        const le_pixel = getPixelFromImageData(input_image_data, x, y + le_displacement);
+        const le_pixel = getPixelFromImageData(input_image_data, x + le_displacement, y);
 
         if(le_pixel !== null){
           le_resultat[0] += le_pixel[0] * la_fenetre[k];
@@ -205,8 +182,8 @@ function applyGaussianFilter(
   }
   
 
-  //Second pass, convolve the generated 1-D Gaussian kernel with the
-  //input image through the vertical.
+  //Second pass, convolve the image along the columns using the generated
+  //1-D Gaussian kernel.
   const i2 = new ImageData(
     i1.data, 
     i1.width, 
@@ -217,7 +194,7 @@ function applyGaussianFilter(
       const le_resultat = [0, 0, 0, 0];
       for(let k = 0; k < kernel_size; k++){
         const le_displacement = k - Math.floor(kernel_size / 2);
-        const le_pixel = getPixelFromImageData(i1, x + le_displacement, y);
+        const le_pixel = getPixelFromImageData(i1, x, y + le_displacement);
 
         if(le_pixel !== null){
           le_resultat[0] += le_pixel[0] * la_fenetre[k];

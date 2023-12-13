@@ -1,0 +1,26 @@
+.outline {
+  outline: 1px solid red;
+}
+
+main {
+  display: flex;
+  flex-direction: column;
+  min-width: 99vw;
+  max-width: 99vw;
+}
+
+.canvas-container {
+  display: flex;
+}
+
+.canvas-container > div:first-child {
+  flex-basis: 100%;
+  background-color: #aaaa;
+  overflow-x:scroll;
+  overflow-y:scroll;
+}
+
+.canvas-container > div:last-child {
+  flex-shrink: 1;
+  background-color: #aaaa;
+}

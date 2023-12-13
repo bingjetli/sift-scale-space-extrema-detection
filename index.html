@@ -3,11 +3,25 @@
     <head>
         <meta charset="utf-8">
         <title>SIFT DETECTOR</title>
-        <script src="main.js"></script>
+        <link rel="stylesheet" type="text/css" href="styles.css">
+        <script type="module" src="src/worker.js"></script>
+        <script type="module" src="src/image.js"></script>
+        <script type="module" src="main.js"></script>
     </head>
     <body>
-        <button id="load-button">Load Image</button>
-        <canvas id="canvas"></canvas>
-        <canvas id="canvas-alt"></canvas>
+      <main>
+          <button id="load-button">Load Image</button>
+          <div class="canvas-container">
+            <div>
+              <canvas id="canvas-1" class="outline"></canvas>
+            </div>
+            <div>
+              <canvas id="canvas-2" class="outline"></canvas>
+            </div>
+          </div>
+
+          <div id="blurred-images-container"></div>
+
+      </main>
     </body>
 </html>

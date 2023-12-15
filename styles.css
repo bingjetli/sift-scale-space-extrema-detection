@@ -1,26 +1,48 @@
-.outline {
-  outline: 1px solid red;
+/**** Css Resets ****/
+
+html {
+  box-sizing: border-box;
 }
+
+body {
+  margin:0;
+  padding: 0;
+  color: darkslategrey;
+}
+
+*, *:before, *:after {
+  box-sizing: inherit;
+}
+
+/**** MAIN ****/
 
 main {
   display: flex;
   flex-direction: column;
-  min-width: 99vw;
-  max-width: 99vw;
+  min-width: 100vw;
+  max-width: 100vw;
+  min-height: 100vh;
+  background-color: slategray;
 }
 
 .canvas-container {
+  min-height: 50vh;
+  max-height: 50vh;
+  background-color: darkslategrey;
+  overflow: auto;
+}
+
+#text-output {
+  min-height: 10em;
+  max-height: 10em;
+  margin: 1em 10vw;
+  padding: 1em;
+  outline: 1px solid darkslategrey;
+}
+
+#load-button-container {
   display: flex;
-}
-
-.canvas-container > div:first-child {
-  flex-basis: 100%;
-  background-color: #aaaa;
-  overflow-x:scroll;
-  overflow-y:scroll;
-}
-
-.canvas-container > div:last-child {
-  flex-shrink: 1;
-  background-color: #aaaa;
+  justify-content: center;
+  align-items: center;
+  padding: 1em;
 }

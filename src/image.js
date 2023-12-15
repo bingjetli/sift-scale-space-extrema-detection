@@ -79,12 +79,12 @@ export function getImageChunkBoundaries(
     //actual width? If so, only offset the image by the amount that is
     //available.
     let x_offset = (x + chunk_size) >= image_width ?
-      image_width - x - 1 : chunk_size;
+      image_width - x : chunk_size;
 
     for (let y = 0; y < image_height; y += chunk_size) {
       //Same goes for the `y_offset`.
       let y_offset = (y + chunk_size) >= image_height ?
-        image_height - y - 1 : chunk_size;
+        image_height - y : chunk_size;
 
       //Add the chunk boundary to the list of chunk boundaries.
       chunk_boundaries.push({

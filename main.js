@@ -2,7 +2,7 @@
 'use-strict';
 
 import { getImageChunkBoundaries } from './src/image.js';
-import { getImage2DDimensions, image2DLinearUpsample2x, image2DToImageData, imageDataToImage2D } from './src/image2d.js';
+import { getImage2DDimensions, image2DLinearDownsample2x, image2DLinearUpsample2x, image2DToImageData, imageDataToImage2D } from './src/image2d.js';
 import { WorkerMessageTypes, workerGetBlurredChunk, workerGetOutputImage2D, workerSetTargetImage2D } from './src/worker.js';
 
 /**
@@ -20,7 +20,7 @@ import { WorkerMessageTypes, workerGetBlurredChunk, workerGetOutputImage2D, work
 //Global Variables
 const CHUNK_SIZE = 32;
 const MAX_OCTAVES = 4;
-const MAX_SCALE_LEVELS = 5;
+const SCALE_LEVELS = 3;
 const INITIAL_SIGMA = 1.6;
 let input_image_2d = null;
 let background_thread = null;
@@ -31,6 +31,16 @@ let current_chunk_index = -1;
 let scale_space = null;
 let current_octave_index = -1;
 let current_scale_level_index = -1;
+let incremental_sigmas = null;
+let state = null;
+
+
+
+
+const State = {
+  GENERATE_GAUSSIAN_PYRAMID: 'generate-gaussian-pyramid',
+  GENERATE_DOG_PYRAMID: 'generate-dog-pyramid',
+};
 
 
 
@@ -123,7 +133,12 @@ function onBackgroundThreadRespond(event) {
       break;
 
     case WorkerMessageTypes.OUTPUT_IMAGE_2D_RESULT:
-      onReceiveOutputImage2DResult(event.data);
+      if (state === State.GENERATE_GAUSSIAN_PYRAMID) {
+        onReceiveBlurredImage2DResult(event.data);
+      }
+      else if (state === State.GENERATE_DOG_PYRAMID) {
+        onReceiveDoGImage2DResult(event.data);
+      }
       break;
     default:
       console.log('main.js received the following :');
@@ -172,15 +187,10 @@ function onReceiveBlurredChunkResult(event) {
 
 
 
-function onReceiveOutputImage2DResult(event) {
+function onReceiveBlurredImage2DResult(event) {
 
   //Add the image_2d to the image stack.
   scale_space[current_octave_index].gaussians.push(event.image2D);
-  console.log(`current_octave : ${current_octave_index}
-current_scale_level : ${current_scale_level_index}
-scale_space :
-`);
-  console.log(scale_space);
 
 
   //Add the main canvas image to the stack of gaussians
@@ -188,6 +198,96 @@ scale_space :
 
 
   //Is this the last image in the stack?
+  current_scale_level_index++;
+  if (current_scale_level_index < SCALE_LEVELS + 3) {
+
+    //There are still more images in the stack to blur. So update the 
+    //worker's blur target image to the image that we just got back.
+    workerSetTargetImage2D(background_thread, event.image2D);
+
+
+    //Reset the chunk index so that it can start blurring from the 
+    //first chunk. The chunk boundaries should still remain the same
+    //since the image dimensions shouldn't change yet.
+    current_chunk_index = 0;
+
+
+    //And now apply the incremental blur to this new image.
+    workerGetBlurredChunk(
+      background_thread,
+      chunk_boundaries[current_chunk_index],
+      incremental_sigmas[current_scale_level_index]
+    );
+  }
+  else {
+
+    //This is the last image in the stack.
+    current_octave_index++;
+    if (current_octave_index < MAX_OCTAVES) {
+
+      //There are still more octaves left to process. So Take the image
+      //that's 2 images left from the end of the stack and downsample 
+      //this image by 2. Incidentally, due to the way javascript arrays
+      //work, `length - 3` accesses the 3rd element from the end of the
+      //list, which is 2 elements from the end of the list and is the 
+      //element we need. It might be coincidental that SCALE levels will
+      //give the index for this image, since we +3 to get the length of
+      //the `gaussians` stack.
+      const downsampled_image_2d = image2DLinearDownsample2x(
+        scale_space[current_octave_index - 1].gaussians[SCALE_LEVELS]
+      );
+
+
+      //Update the worker's blur target image to the newly resampled image.
+      workerSetTargetImage2D(background_thread, downsampled_image_2d);
+
+
+      //Recalculate the chunk boundaries for this new image. Reset the
+      //Chunk counter and set the scale level to 1 since the image is
+      //already blurred and we want to incrementally blur the following
+      //images.
+      const [width, height] = getImage2DDimensions(downsampled_image_2d);
+      chunk_boundaries = getImageChunkBoundaries(width, height, CHUNK_SIZE);
+      current_chunk_index = 0;
+      current_scale_level_index = 1;
+
+
+      //Update the main canvas
+      main_canvas.height = height;
+      main_canvas.width = width;
+      main_canvas_context.putImageData(image2DToImageData(downsampled_image_2d), 0, 0);
+
+
+      //Add the newly downsampled image to the stack of gaussians div.
+      addMainCanvasImageToGaussianStackContainer();
+
+
+      //Apply the incremental blur to this new image.
+      workerGetBlurredChunk(
+        background_thread,
+        chunk_boundaries[current_chunk_index],
+        incremental_sigmas[current_scale_level_index]
+      );
+    }
+    else {
+
+      //There are no more octaves to process, check the current 
+      //state of the system.
+      if (state === State.GENERATE_GAUSSIAN_PYRAMID) {
+
+        //Finished generating the gaussian pyramid, now it's time to
+        //generate the difference of gaussian pyramid. Update the state.
+        state = State.GENERATE_DOG_PYRAMID;
+
+
+        //Reset all counter variables and begin calculating the difference
+        //of gaussians.
+        current_octave_index = 0;
+        current_scale_level_index = 0;
+        current_chunk_index = 0;
+      }
+    }
+  }
 }
 
 
@@ -242,6 +342,16 @@ function prepareScaleSpaceExtremaDetection() {
   }
   current_octave_index = 0;
   current_scale_level_index = 0;
+
+
+  //Set the current state of the main thread.
+  state = State.GENERATE_GAUSSIAN_PYRAMID;
+
+
+  //Generate a list of gaussian sigma values to incrementally blur our
+  //input images with.
+  incremental_sigmas = generateGaussianKernels(INITIAL_SIGMA, SCALE_LEVELS);
+  console.log(incremental_sigmas);
 
 
   //Generate the base image for the scale space.
@@ -309,4 +419,78 @@ function generateBaseImage() {
   chunk_boundaries = getImageChunkBoundaries(width, height, CHUNK_SIZE);
   current_chunk_index = 0;
   workerGetBlurredChunk(background_thread, chunk_boundaries[current_chunk_index], base_image_sigma);
+}
+
+
+
+
+function generateGaussianKernels(sigma, scale_levels) {
+  /**
+   * GENERATING THE BLUR SIGMAS
+   * 
+   * An octave appears to be a collection of images where the blur applied
+   * in the stack of images goes from `sigma` to `2 * sigma`.
+   * 
+   * 
+   * If `s` defines the scale level of the octave, then each octave needs
+   * to produce `s + 3` number of images for the Gaussian stack. This is
+   * because 1 image will be lost when calculating the difference of 
+   * Gaussians because it takes 2 adjacent gaussian images and calculates
+   * the difference across the octave. So if there are 6 images in the 
+   * gaussian stack, it'll produce 5 images in the DoG stack.
+   * 
+   * 
+   * The DoG stack will then contain `s+2` images. The extra 2 images
+   * are used to pad the first and last layer in the DoG stack since 
+   * the extrema detection phase involves taking a 3x3x3 scan of adjacent
+   * layers for local maxima and minima. Having the extra layers allows
+   * the first and last layers to be properly scanned for potential 
+   * features.
+   * 
+   * 
+   * Since the blur is applied incrementally on the previous blurred 
+   * image, `sigma^2 = sigma_1^2 + sigma_2^2` can be used to determine
+   * what the sigma value needed to acheive a specified blur on that
+   * image in the stack is.
+   * 
+   * 
+   * `k = 2 ^ (1 / s)` is used to determine the constant factor between
+   * each gaussian blurred image. 
+   * 
+   * 
+   * For the stack of blurred images, the first image has a blur of `sigma`.
+   * The second image has a blur of `k * sigma`. The third image has a blur
+   * of `k * (k * sigma)` which is the same as `k^2 * sigma`. The fourth has
+   * `k * (k * (k * sigma))` which is the same as `k^3 * sigma`, and so on.
+   * 
+   * 
+   * FULL DISCLOSURE
+   *
+   * I still can't wrap my head around why this part of the algorithm is 
+   * implemented like this. I spent an entire day trying to figure this part
+   * out and I feel as though I've only understood a portion of it. What I've
+   * written above is my understanding of it so far based on my research, but I haven't
+   * been able to gain an intuitive understanding of it like I normally would.
+   * But in the interest of time, I feel I need to move on with the rest of the
+   * implementation so I could have something semi-working by the time I submit 
+   * this project.
+   */
+  const images_per_octave = scale_levels + 3;
+  const k = Math.pow(2, 1.0 / scale_levels);
+  const gaussian_kernels = [];
+
+
+  gaussian_kernels.push(sigma);
+
+
+  for (let i = 1; i < images_per_octave; i++) {
+    const previous_sigma = Math.pow(k, i - 1) * sigma;
+    const total_sigma = k * previous_sigma;
+
+
+    gaussian_kernels.push(Math.sqrt(Math.pow(total_sigma, 2) - Math.pow(previous_sigma, 2)));
+  }
+
+
+  return gaussian_kernels;
 }

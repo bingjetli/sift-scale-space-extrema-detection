@@ -1,6 +1,5 @@
-import { dogToImageData, subtractImageData } from './src/dog.js';
-import { applyGaussianBlur, blurChunk2D } from './src/gaussian-blur.js';
-import { createBlankImage2D, image2DToImageData, imageDataToImage2D } from './src/image2d.js';
+import { blurChunk2D } from './src/gaussian-blur.js';
+import { createBlankImage2D, image2DToImageData } from './src/image2d.js';
 import { WorkerMessageTypes } from './src/worker.js';
 
 console.log('background.js is running');
@@ -24,8 +23,9 @@ onmessage = e => {
       target_image_2d = e.data.targetImage2D;
 
 
-      console.log('`target_image_2d` set to the following :');
-      console.log(target_image_2d);
+      //console.log('`target_image_2d` set to the following :');
+      //console.log(target_image_2d);
+      console.log('Background Thread : New target image set.');
 
 
       //Create a new output image based on the input dimensions.
@@ -58,34 +58,6 @@ onmessage = e => {
         type: WorkerMessageTypes.BLURRED_CHUNK_RESULT,
         chunkImageData: image2DToImageData(blurred_chunk_img2d),
         sigma: e.data.sigma
-      });
-      break;
-
-
-
-
-    case WorkerMessageTypes.APPLY_GAUSSIAN_BLUR:
-      postMessage({
-        type: WorkerMessageTypes.GAUSSIAN_BLUR_RESULT,
-        data: applyGaussianBlur(
-          e.data.image_data,
-          e.data.kernel_size,
-          e.data.sigma,
-          e.data.chunk_offsets.x1,
-          e.data.chunk_offsets.y1,
-          e.data.chunk_offsets.x2,
-          e.data.chunk_offsets.y2
-        )
-      });
-      break;
-
-
-
-
-    case WorkerMessageTypes.CALCULATE_DIFFERENCE_OF_GAUSSIAN:
-      postMessage({
-        type: WorkerMessageTypes.DIFFERENCE_OF_GAUSSIAN_RESULT,
-        data: dogToImageData(subtractImageData(e.data.images[0], e.data.images[1]))
       });
       break;
 

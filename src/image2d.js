@@ -220,3 +220,35 @@ export function image2DLinearUpsample2x(image_2d) {
 
   return copy_image_2d;
 }
+
+
+
+
+export function image2DLinearDownsample2x(image_2d) {
+  const [width, height] = getImage2DDimensions(image_2d);
+  const copy_image_2d = [];
+
+
+  for (let y = 0; y < height; y += 2) {
+    const image_row = [];
+
+
+    for (let x = 0; x < width; x += 2) {
+
+      //Deep copy the pixel value by converting it into a string. Then
+      //parsing it into a number again.
+      const pixel_value = Number(`${image_2d[y][x]}`);
+
+
+      //Add the sampled pixel onto the image row.
+      image_row.push(pixel_value);
+    }
+
+
+    //Add this row to the stack of rows which form the image.
+    copy_image_2d.push(image_row);
+  }
+
+
+  return copy_image_2d;
+}

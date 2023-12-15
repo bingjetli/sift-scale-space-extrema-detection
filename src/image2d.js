@@ -252,3 +252,44 @@ export function image2DLinearDownsample2x(image_2d) {
 
   return copy_image_2d;
 }
+
+
+
+
+export function normalizeImage2D(image_2d) {
+  const [width, height] = getImage2DDimensions(image_2d);
+  let max = Number.MIN_SAFE_INTEGER;
+  let min = Number.MAX_SAFE_INTEGER;
+
+
+  const output_image_2d = [];
+
+
+  //Find the min and max pixel values for this image 2d.
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const pixel = image_2d[y][x];
+
+
+      min = pixel < min ? pixel : min;
+      max = pixel > max ? pixel : max;
+    }
+  }
+
+
+  //Now normalize using this information
+  for (let y = 0; y < height; y++) {
+    const image_row = [];
+
+
+    for (let x = 0; x < width; x++) {
+      image_row.push(((image_2d[y][x] - min) / (max - min)) * 255);
+    }
+
+
+    output_image_2d.push(image_row);
+  }
+
+
+  return output_image_2d;
+}

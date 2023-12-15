@@ -2,8 +2,8 @@
 'use-strict';
 
 import { getImageChunkBoundaries } from './src/image.js';
-import { getImage2DDimensions, image2DLinearDownsample2x, image2DLinearUpsample2x, image2DToImageData, imageDataToImage2D } from './src/image2d.js';
-import { WorkerMessageTypes, workerGetBlurredChunk, workerGetOutputImage2D, workerSetTargetImage2D } from './src/worker.js';
+import { getImage2DDimensions, image2DLinearDownsample2x, image2DLinearUpsample2x, image2DToImageData, imageDataToImage2D, normalizeImage2D } from './src/image2d.js';
+import { WorkerMessageTypes, workerGetBlurredChunk, workerGetDoGChunk, workerGetOutputImage2D, workerSetDoGTargets, workerSetTargetImage2D } from './src/worker.js';
 
 /**
  * REQUIREMENTS
@@ -40,6 +40,7 @@ let state = null;
 const State = {
   GENERATE_GAUSSIAN_PYRAMID: 'generate-gaussian-pyramid',
   GENERATE_DOG_PYRAMID: 'generate-dog-pyramid',
+  DETECT_LOCAL_EXTREMA: 'detect-local-extrema'
 };
 
 
@@ -140,6 +141,11 @@ function onBackgroundThreadRespond(event) {
         onReceiveDoGImage2DResult(event.data);
       }
       break;
+
+    case WorkerMessageTypes.DOG_CHUNK_RESULT:
+      onReceiveDoGChunkResult(event.data);
+      break;
+
     default:
       console.log('main.js received the following :');
       console.log(event.data);
@@ -172,6 +178,42 @@ function onReceiveBlurredChunkResult(event) {
       background_thread,
       chunk_boundaries[current_chunk_index],
       event.sigma,
+    );
+  }
+  else {
+
+    //All the chunks in the image have been blurred.
+
+
+    //Get the completed image_2d from the background thread.
+    workerGetOutputImage2D(background_thread);
+  }
+}
+
+
+
+
+function onReceiveDoGChunkResult(event) {
+  //First update the canvas with the chunk image data.
+  main_canvas_context.putImageData(
+    event.chunkImageData,
+    chunk_boundaries[current_chunk_index].x1,
+    chunk_boundaries[current_chunk_index].y1
+  );
+
+
+  //Increment the chunk counter and check if all the chunks have been 
+  //calculated already
+  current_chunk_index++;
+  if (current_chunk_index < chunk_boundaries.length) {
+
+    //There are still chunks left in the image to calculate.
+
+
+    //Send another chunk to the background thread to be blurred.
+    workerGetDoGChunk(
+      background_thread,
+      chunk_boundaries[current_chunk_index],
     );
   }
   else {
@@ -249,7 +291,7 @@ function onReceiveBlurredImage2DResult(event) {
       const [width, height] = getImage2DDimensions(downsampled_image_2d);
       chunk_boundaries = getImageChunkBoundaries(width, height, CHUNK_SIZE);
       current_chunk_index = 0;
-      current_scale_level_index = 1;
+      current_scale_level_index = 0;
 
 
       //Update the main canvas
@@ -285,10 +327,168 @@ function onReceiveBlurredImage2DResult(event) {
         current_octave_index = 0;
         current_scale_level_index = 0;
         current_chunk_index = 0;
+
+
+        //Set the main canvas image to the first gaussian image.
+        const [width, height] = getImage2DDimensions(scale_space[current_octave_index].gaussians[current_scale_level_index]);
+        main_canvas.width = width;
+        main_canvas.height = height;
+        const image_data = image2DToImageData(scale_space[current_octave_index].gaussians[current_scale_level_index]);
+        main_canvas_context.putImageData(image_data, 0, 0);
+
+
+        //Recalculate chunk boundaries for the DoG algorithm.
+        chunk_boundaries = getImageChunkBoundaries(width, height, CHUNK_SIZE);
+
+
+        //Set the background thread's target images to the gaussian images of
+        //the first octave.
+        workerSetDoGTargets(background_thread, [
+          scale_space[current_octave_index].gaussians[current_scale_level_index],
+          scale_space[current_octave_index].gaussians[current_scale_level_index + 1],
+        ]);
+
+
+        //Calculate the difference of gaussians
+        workerGetDoGChunk(background_thread, chunk_boundaries[current_chunk_index]);
       }
     }
   }
 }
+
+
+
+
+function onReceiveDoGImage2DResult(event) {
+
+  //Add the image_2d to the image stack.
+  scale_space[current_octave_index].differenceOfGaussians.push(event.image2D);
+
+
+  //Update the image in the main canvas
+  main_canvas_context.putImageData(
+    image2DToImageData(normalizeImage2D(event.image2D)),
+    0, 0
+  );
+
+
+  //Add main canvas image to the DoG stack containers
+  addMainCanvasImageToDoGStackContainer();
+
+
+  //Is this the last image in the stack?
+  current_scale_level_index++;
+  if (current_scale_level_index < SCALE_LEVELS + 2) {
+
+    //There are still more images in the stack to compute the difference
+    //of gaussians for, so update the worker's image pair to the next
+    //set of images to compute.
+    workerSetDoGTargets(
+      background_thread,
+      [
+        scale_space[current_octave_index].gaussians[current_scale_level_index],
+        scale_space[current_octave_index].gaussians[current_scale_level_index + 1]
+      ]
+    );
+
+
+    //Reset the chunk index so that it can start computing the difference
+    //of gaussians from the first chunk again. The chunk boundaries should
+    //still remain the same since the image dimensions shouldn't change yet
+    current_chunk_index = 0;
+
+
+    //Now compute the difference of gaussian for this new image.
+    workerGetDoGChunk(background_thread, chunk_boundaries[current_chunk_index]);
+  }
+  else {
+
+    //This is the last image in the stack.
+    current_octave_index++;
+    if (current_octave_index < MAX_OCTAVES) {
+      //There are still more octaves left to process, so reset the scale
+      //space index to 0.
+      current_scale_level_index = 0;
+
+
+      //Reset the chunk index so it can start computing the difference of
+      //gaussians from the first chunk again.
+      current_chunk_index = 0;
+
+
+      //Update the main canvas with the new image from the new octave.
+      const [width, height] = getImage2DDimensions(scale_space[current_octave_index].gaussians[current_scale_level_index]);
+      main_canvas.width = width;
+      main_canvas.height = height;
+      const image_data = image2DToImageData(scale_space[current_octave_index].gaussians[current_scale_level_index]);
+      main_canvas_context.putImageData(image_data, 0, 0);
+
+
+      //Recalculate the chunk boundaries since we're now working with
+      //a downsized image.
+      chunk_boundaries = getImageChunkBoundaries(width, height, CHUNK_SIZE);
+
+
+      //Update the worker's image pair to the next set of images to compute
+      workerSetDoGTargets(background_thread, [
+        scale_space[current_octave_index].gaussians[current_scale_level_index],
+        scale_space[current_octave_index].gaussians[current_scale_level_index + 1]
+      ]);
+
+
+      //Start calculating the difference of gaussians again.
+      workerGetDoGChunk(background_thread, chunk_boundaries[current_chunk_index]);
+
+      console.log(scale_space);
+    }
+    else {
+
+      //There are no more octaves to process, check the current state
+      //of the system.
+      if (state === State.GENERATE_DOG_PYRAMID) {
+
+        //Finished generating the DoG pyramid, now it's time to find
+        //local extrema within the DoG layers. Update the state.
+        state = State.DETECT_LOCAL_EXTREMA;
+
+
+        //Reset all counter variables and begin detection of local extrema.
+        current_octave_index = 0;
+        current_scale_level_index = 0;
+        current_chunk_index = 0;
+
+
+        //Set the main canvas image to the second dog_image.
+        const [width, height] = getImage2DDimensions(scale_space[current_octave_index].differenceOfGaussians[current_scale_level_index + 1]);
+        main_canvas.width = width;
+        main_canvas.height = height;
+        const image_data = image2DToImageData(scale_space[current_octave_index].differenceOfGaussians[current_scale_level_index + 1]);
+        main_canvas_context.putImageData(image_data, 0, 0);
+
+
+        //Recalculate the chunk boundaries for the detection algorithm
+        chunk_boundaries = getImageChunkBoundaries(width, height, CHUNK_SIZE);
+
+
+        //Set the background thread's target images to the DoG images of the
+        //first octave.
+        workerSetDetectionTargets(background_thread, [
+          scale_space[current_octave_index].differenceOfGaussians[current_scale_level_index],
+          scale_space[current_octave_index].differenceOfGaussians[current_scale_level_index + 1],
+          scale_space[current_octave_index].differenceOfGaussians[current_scale_level_index + 2],
+        ]);
+
+
+        //Run the detection algorithm
+        //TODO:
+      }
+    }
+  }
+}
+
+
+
+
 
 
 
@@ -306,6 +506,19 @@ function addMainCanvasImageToGaussianStackContainer() {
 
 
   document.getElementById(`octave-${current_octave_index + 1}-gaussian-stack-container`).append(canvas);
+}
+
+
+
+
+function addMainCanvasImageToDoGStackContainer() {
+  const canvas = document.createElement('canvas');
+  canvas.height = main_canvas.height;
+  canvas.width = main_canvas.width;
+  canvas.getContext('2d').putImageData(main_canvas_context.getImageData(0, 0, main_canvas.width, main_canvas.height), 0, 0);
+
+
+  document.getElementById(`octave-${current_octave_index + 1}-dog-stack-container`).append(canvas);
 }
 
 

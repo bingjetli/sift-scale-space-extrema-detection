@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { getPixelFromImageData, setPixelForImageData } from './image.js';
+import { getImage2DDimensions } from './image2d.js';
 
 export function subtractImageData(image_data_1, image_data_2) {
   const output = [];
@@ -85,4 +86,42 @@ export function dogToImageData(dog_result) {
 
 
   return output;
+}
+
+
+
+
+export function computeDoGChunk2D(
+  image1_2d,
+  image2_2d,
+  output_image_2d,
+  chunk_boundary
+) {
+  const chunk_image_2d = [];
+
+
+  for (let y = chunk_boundary.y1; y < chunk_boundary.y2; y++) {
+    const image_row = [];
+
+
+    for (let x = chunk_boundary.x1; x < chunk_boundary.x2; x++) {
+
+      //Take the difference of the gaussian image pixel values and
+      //store the result in the output_image_2d.
+      const difference = image2_2d[y][x] - image1_2d[y][x];
+      output_image_2d[y][x] = difference;
+
+
+      //Also push the result in the image row
+      image_row.push(difference);
+    }
+
+
+    //Push that image row onto the chunk image 2d.
+    chunk_image_2d.push(image_row);
+  }
+
+
+  //Return the chunk image_2d array.
+  return chunk_image_2d;
 }

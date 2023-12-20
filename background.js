@@ -1,9 +1,24 @@
 import { computeDoGChunk2D } from './src/dog.js';
 import { blurChunk2D } from './src/gaussian-blur.js';
-import { createBlankImage2D, image2DToImageData, imageDataToImage2D, normalizeImage2D } from './src/image2d.js';
+import { ImageDataEx } from './src/image-data-ex.js';
+import { createBlankImage2D, image2DToImageData, normalizeImage2D } from './src/image2d.js';
+import { getPotentialKeypoints } from './src/keypoints.js';
 import { WorkerMessageTypes } from './src/worker.js';
 
 console.log('background.js is running');
+
+/**
+ * Experiment to test whether messages are queued between threads.
+ * 
+ * Conclusion : Messages are queued and executed sequentially.
+ */
+//for (let i = 0; i < 10; i++) {
+//  postMessage({
+//    type: WorkerMessageTypes.MESSAGE_QUEUE_TEST,
+//    data: i,
+//  });
+//}
+
 
 let target_image_2d = null;
 let target_dog_pair_images_2d = null;
@@ -120,6 +135,17 @@ onmessage = e => {
         type: WorkerMessageTypes.DOG_CHUNK_RESULT,
         chunkImageData: image2DToImageData(normalizeImage2D(dog_chunk_img2d)),
       });
+      break;
+
+
+
+    case WorkerMessageTypes.GET_POTENTIAL_KEYPOINTS:
+      //By this point, the target images for this detection algorithm
+      //should have been set already. Since, we are scanning in a 3x3x3
+      //cube, we shouldn't need to chunk the image. It's also a bit of a 
+      //hassle to calculate all the correct points to sample if we continue
+      //to use chunking here. So therefore, we sample the entire image.
+      getPotentialKeypoints(target_detection_image_trio_2d);
       break;
 
 

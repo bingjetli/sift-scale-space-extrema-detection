@@ -20,7 +20,13 @@ export const WorkerMessageTypes = {
   DOG_PAIR_IMAGES_2D_IS_SET: 'dog-pair-images-2d-is-set',
 
   SET_DETECTION_IMAGES_2D: 'set-detection-images-2d',
-  DETECTION_IMAGES_2D_IS_SET: 'detection-images-2d-is-set'
+  DETECTION_IMAGES_2D_IS_SET: 'detection-images-2d-is-set',
+
+  GET_POTENTIAL_KEYPOINTS_CHUNK: 'get-potential-keypoints-chunk',
+  GET_POTENTIAL_KEYPOINTS: 'get-potential-keypoints',
+  POTENTIAL_KEYPOINTS_CHUNK_RESULT: 'potential-keypoints-chunk-result',
+
+  MESSAGE_QUEUE_TEST: 'message-queue-test',
 };
 
 
@@ -115,3 +121,23 @@ export function workerSetDetectionTargets(worker, image_trio) {
     targetImageTrio: image_trio
   });
 }
+
+
+
+
+export function workerGetPotentialKeypointsChunk(worker, chunk_boundary) {
+  worker.postMessage({
+    type: WorkerMessageTypes.GET_POTENTIAL_KEYPOINTS_CHUNK,
+    chunkBoundary: chunk_boundary
+  });
+}
+
+
+
+export function workerGetPotentialKeypoints(worker) {
+  worker.postMessage({
+    type: WorkerMessageTypes.GET_POTENTIAL_KEYPOINTS,
+  });
+}
+
+

@@ -1,7 +1,7 @@
 // @ts-nocheck
 //Gaussian function for 2 dimensions i and j. Based on the equation 
 
-import { getPixelFromImageData, setPixelForImageData } from './image.js';
+import { getPixelFromImageData, setPixelForImageData } from '../unused/image.js';
 import { Image2DColorSpace, getImage2DDimensions } from './image2d.js';
 
 //obtained from ~11:00 in the video : https://youtu.be/-LD9MxBUFQo?si=r08BmDOgvnhEcofy

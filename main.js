@@ -1,9 +1,10 @@
 //@ts-nocheck
 'use-strict';
 
-import { getImageChunkBoundaries } from './src/image.js';
+import { getImageChunkBoundaries } from './unused/image.js';
 import { getImage2DDimensions, image2DLinearDownsample2x, image2DLinearUpsample2x, image2DToImageData, imageDataToImage2D, normalizeImage2D } from './src/image2d.js';
-import { WorkerMessageTypes, workerGetBlurredChunk, workerGetDoGChunk, workerGetOutputImage2D, workerSetDoGTargets, workerSetTargetImage2D } from './src/worker.js';
+import { WorkerMessageTypes, workerGetBlurredChunk, workerGetDoGChunk, workerGetOutputImage2D, workerGetPotentialKeypoints, workerGetPotentialKeypointsChunk, workerSetDetectionTargets, workerSetDoGTargets, workerSetTargetImage2D } from './src/worker.js';
+import { ImageDataEx } from './src/image-data-ex.js';
 
 /**
  * REQUIREMENTS
@@ -102,6 +103,9 @@ window.onload = _ => {
 
         //Convert the image to a grayscale Image2D array and draw it 
         //onto the main canvas.
+        const ide = new ImageDataEx();
+        ide.loadDataFrom(main_canvas_context.getImageData(0, 0, image_element.width, image_element.height));
+        ide.printSelf();
         input_image_2d = imageDataToImage2D(main_canvas_context.getImageData(0, 0, image_element.width, image_element.height));
         main_canvas_context.putImageData(image2DToImageData(input_image_2d), 0, 0);
 
@@ -144,6 +148,13 @@ function onBackgroundThreadRespond(event) {
 
     case WorkerMessageTypes.DOG_CHUNK_RESULT:
       onReceiveDoGChunkResult(event.data);
+      break;
+
+    case WorkerMessageTypes.MESSAGE_QUEUE_TEST:
+      console.log(`Received : ${event.data.data}`);
+      for (let i = 0; i < 1000; i++) {
+        console.log('waiting...');
+      }
       break;
 
     default:
@@ -480,7 +491,8 @@ function onReceiveDoGImage2DResult(event) {
 
 
         //Run the detection algorithm
-        //TODO:
+        //workerGetPotentialKeypointsChunk(background_thread, chunk_boundaries[current_chunk_index]);
+        workerGetPotentialKeypoints(background_thread);
       }
     }
   }

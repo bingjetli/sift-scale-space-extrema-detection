@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { getPixelFromImageData, setPixelForImageData } from './image.js';
+import { getPixelFromImageData, setPixelForImageData } from '../unused/image.js';
 import { getImage2DDimensions } from './image2d.js';
 
 export function subtractImageData(image_data_1, image_data_2) {

@@ -67,6 +67,62 @@ export class ImageDataEx {
         //Initialize a pixel index for this image.
         let pixel_index = -1;
         switch (this.colorspace) {
+          case ImageDataExColorSpace.RGBA:
+            pixel_index = y * (this.width * 4) + (x * 4);
+
+
+            this.data[pixel_index] = image_data.data[image_data_pixel_index];
+            this.data[pixel_index + 1] = image_data.data[image_data_pixel_index + 1];
+            this.data[pixel_index + 2] = image_data.data[image_data_pixel_index + 2];
+            this.data[pixel_index + 3] = image_data.data[image_data_pixel_index + 3];
+            break;
+
+
+          case ImageDataExColorSpace.RGB:
+            pixel_index = y * (this.width * 3) + (x * 3);
+
+
+            this.data[pixel_index] = image_data.data[image_data_pixel_index];
+            this.data[pixel_index + 1] = image_data.data[image_data_pixel_index + 1];
+            this.data[pixel_index + 2] = image_data.data[image_data_pixel_index + 2];
+            break;
+
+
+          case ImageDataExColorSpace.PERCEPTUAL_GRAYSCALE_ALPHA:
+
+            //This is mostly the same as `GRAYSCALE` except the channels
+            //are weighted according to how humans perceive each color channel
+            //there is also an extra alpha channel.
+            pixel_index = y * (this.width * 2) + (x * 2);
+
+
+            //Conversion of the image to grayscale using common weights based
+            //on human perception.
+            this.data[pixel_index] = (image_data.data[image_data_pixel_index] * 0.299) +
+              (image_data.data[image_data_pixel_index + 1] * 0.587) +
+              (image_data.data[image_data_pixel_index + 2] * 0.114);
+
+
+            //Set the new image's alpha channel.
+            this.data[pixel_index + 1] = image_data.data[image_data_pixel_index + 3];
+            break;
+
+
+          case ImageDataExColorSpace.PERCEPTUAL_GRAYSCALE:
+
+            //This is mostly the same as `GRAYSCALE` except the channels
+            //are weighted according to how humans perceive each color channel.
+            pixel_index = y * this.width + x;
+
+
+            //Conversion of the image to grayscale using common weights based
+            //on human perception.
+            this.data[pixel_index] = (image_data.data[image_data_pixel_index] * 0.299) +
+              (image_data.data[image_data_pixel_index + 1] * 0.587) +
+              (image_data.data[image_data_pixel_index + 2] * 0.114);
+            break;
+
+
           case ImageDataExColorSpace.GRAYSCALE_ALPHA:
 
             //This is the same as `GRAYSCALE` except it has an alpha
@@ -83,6 +139,8 @@ export class ImageDataEx {
             //Set the new image's alpha channel.
             this.data[pixel_index + 1] = image_data.data[image_data_pixel_index + 3];
             break;
+
+
           default:
 
             //The default colorspace is `GRAYSCALE`.

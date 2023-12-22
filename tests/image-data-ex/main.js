@@ -45,36 +45,50 @@ window.onload = _ => {
       URL.revokeObjectURL(image_url);
 
 
-      //Convert the image to a grayscale Image2D array and draw it onto
-      //the appropriate canvas.
-      const grayscale = new ImageDataEx().loadDataFrom(
+      //Convert the image into a grayscale ImageDataEx and draw it on
+      //to the appropriate canvas.
+      let image_data_ex = new ImageDataEx().loadDataFrom(
         input_canvas_context.getImageData(
           0, 0, image_element.width, image_element.height
         ),
         ImageDataExColorSpace.GRAYSCALE
       );
-      const grayscale_canvas = document.getElementById('grayscale');
-      grayscale_canvas.width = grayscale.width;
-      grayscale_canvas.height = grayscale.height;
-      grayscale_canvas.getContext('2d').putImageData(grayscale.toImageData(), 0, 0);
-
-
-      //Convert the image to a perceptual grayscale Image2D array and 
-      //draw it onto the appropriate canvas.
-      let image_data_ex = new ImageDataEx().loadDataFrom(
-        input_canvas_context.getImageData(
-          0, 0, image_element.width, image_element.height
-        ),
-        ImageDataExColorSpace.PERCEPTUAL_GRAYSCALE
-      );
-      let canvas = document.getElementById('perceptual-grayscale');
+      let canvas = document.getElementById('grayscale');
       canvas.width = image_data_ex.width;
       canvas.height = image_data_ex.height;
       canvas.getContext('2d').putImageData(image_data_ex.toImageData(), 0, 0);
 
 
-      //Convert the image to a perceptual grayscale alpha Image2D array and 
-      //draw it onto the appropriate canvas.
+      //Convert the image into a grayscale alpha ImageDataEx and draw 
+      //it on to the appropriate canvas.
+      image_data_ex = new ImageDataEx().loadDataFrom(
+        input_canvas_context.getImageData(
+          0, 0, image_element.width, image_element.height
+        ),
+        ImageDataExColorSpace.GRAYSCALE_ALPHA
+      );
+      canvas = document.getElementById('grayscale-alpha');
+      canvas.width = image_data_ex.width;
+      canvas.height = image_data_ex.height;
+      canvas.getContext('2d').putImageData(image_data_ex.toImageData(), 0, 0);
+
+
+      //Convert the image into a perceptual grayscale ImageDataEx and
+      //draw it on to the appropriate canvas.
+      image_data_ex = new ImageDataEx().loadDataFrom(
+        input_canvas_context.getImageData(
+          0, 0, image_element.width, image_element.height
+        ),
+        ImageDataExColorSpace.PERCEPTUAL_GRAYSCALE
+      );
+      canvas = document.getElementById('perceptual-grayscale');
+      canvas.width = image_data_ex.width;
+      canvas.height = image_data_ex.height;
+      canvas.getContext('2d').putImageData(image_data_ex.toImageData(), 0, 0);
+
+
+      //Convert the image into a perceptual grayscale alpha ImageDataEx
+      //an draw it on to the appropriate canvas.
       image_data_ex = new ImageDataEx().loadDataFrom(
         input_canvas_context.getImageData(
           0, 0, image_element.width, image_element.height
@@ -82,6 +96,35 @@ window.onload = _ => {
         ImageDataExColorSpace.PERCEPTUAL_GRAYSCALE_ALPHA
       );
       canvas = document.getElementById('perceptual-grayscale-alpha');
+      canvas.width = image_data_ex.width;
+      canvas.height = image_data_ex.height;
+      canvas.getContext('2d').putImageData(image_data_ex.toImageData(), 0, 0);
+
+
+      //Convert the image into a rgb ImageDataEx and draw it on to the
+      //appropriate canvas.
+      image_data_ex = new ImageDataEx().loadDataFrom(
+        input_canvas_context.getImageData(
+          0, 0, image_element.width, image_element.height
+        ),
+        ImageDataExColorSpace.RGB
+      );
+      canvas = document.getElementById('rgb');
+      canvas.width = image_data_ex.width;
+      canvas.height = image_data_ex.height;
+      canvas.getContext('2d').putImageData(image_data_ex.toImageData(), 0, 0);
+
+
+
+      //Convert the image into a rgba ImageDataEx and draw it on to the
+      //appropriate canvas.
+      image_data_ex = new ImageDataEx().loadDataFrom(
+        input_canvas_context.getImageData(
+          0, 0, image_element.width, image_element.height
+        ),
+        ImageDataExColorSpace.RGBA
+      );
+      canvas = document.getElementById('rgba');
       canvas.width = image_data_ex.width;
       canvas.height = image_data_ex.height;
       canvas.getContext('2d').putImageData(image_data_ex.toImageData(), 0, 0);

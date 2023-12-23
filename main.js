@@ -1,10 +1,11 @@
 //@ts-nocheck
 'use-strict';
 
-import { getImageChunkBoundaries } from './unused/image.js';
-import { getImage2DDimensions, image2DLinearDownsample2x, image2DLinearUpsample2x, image2DToImageData, imageDataToImage2D, normalizeImage2D } from './src/image2d.js';
-import { WorkerMessageTypes, workerGetBlurredChunk, workerGetDoGChunk, workerGetOutputImage2D, workerGetPotentialKeypoints, workerGetPotentialKeypointsChunk, workerSetDetectionTargets, workerSetDoGTargets, workerSetTargetImage2D } from './src/worker.js';
+import { convertDoGImage2DToImageData } from './src/dog.js';
 import { ImageDataEx } from './src/image-data-ex.js';
+import { getImage2DDimensions, image2DLinearDownsample2x, image2DLinearUpsample2x, image2DToImageData, imageDataToImage2D, normalizeImage2D } from './src/image2d.js';
+import { WorkerMessageTypes, workerGetBlurredChunk, workerGetDoGChunk, workerGetOutputImage2D, workerGetPotentialKeypoints, workerSetDetectionTargets, workerSetDoGTargets, workerSetTargetImage2D } from './src/worker.js';
+import { getImageChunkBoundaries } from './unused/image.js';
 
 /**
  * REQUIREMENTS
@@ -302,7 +303,7 @@ function onReceiveBlurredImage2DResult(event) {
       const [width, height] = getImage2DDimensions(downsampled_image_2d);
       chunk_boundaries = getImageChunkBoundaries(width, height, CHUNK_SIZE);
       current_chunk_index = 0;
-      current_scale_level_index = 0;
+      current_scale_level_index = 1;
 
 
       //Update the main canvas
@@ -313,6 +314,12 @@ function onReceiveBlurredImage2DResult(event) {
 
       //Add the newly downsampled image to the stack of gaussians div.
       addMainCanvasImageToGaussianStackContainer();
+
+
+      //Add the newly downsampled image to the stack of gaussians to
+      //form the first image in the octave.
+      scale_space[current_octave_index].gaussians.push(downsampled_image_2d);
+
 
 
       //Apply the incremental blur to this new image.
@@ -377,8 +384,12 @@ function onReceiveDoGImage2DResult(event) {
 
 
   //Update the image in the main canvas
+  //main_canvas_context.putImageData(
+  //  image2DToImageData(normalizeImage2D(event.image2D)),
+  //  0, 0
+  //);
   main_canvas_context.putImageData(
-    image2DToImageData(normalizeImage2D(event.image2D)),
+    convertDoGImage2DToImageData(event.image2D),
     0, 0
   );
 
@@ -450,7 +461,6 @@ function onReceiveDoGImage2DResult(event) {
       //Start calculating the difference of gaussians again.
       workerGetDoGChunk(background_thread, chunk_boundaries[current_chunk_index]);
 
-      console.log(scale_space);
     }
     else {
 

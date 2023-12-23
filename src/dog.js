@@ -125,3 +125,58 @@ export function computeDoGChunk2D(
   //Return the chunk image_2d array.
   return chunk_image_2d;
 }
+
+
+
+
+
+//Alternate function to convert the difference of gaussian image to 
+//an image that can be displayed on the 0-255 RGBA ImageData format.
+//This function maps negative values to the red channel, positive values
+//to the green channel and neutral values to the blue channel.
+export function convertDoGImage2DToImageData(image_2d) {
+  const [width, height] = getImage2DDimensions(image_2d);
+
+
+  const offscreen_canvas_context = new OffscreenCanvas(width, height).getContext('2d');
+  const output = offscreen_canvas_context.createImageData(width, height);
+
+
+  //Calculate the minimum and maximum values of the difference of gaussian
+  //image 2d, this will be used to normalize the values later.
+  let max = 0;
+  let min = 255;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const pixel_magnitude = Math.abs(image_2d[y][x]);
+      max = pixel_magnitude > max ? pixel_magnitude : max;
+      min = pixel_magnitude < min ? pixel_magnitude : min;
+    }
+  }
+
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const pixel = image_2d[y][x];
+
+      setPixelForImageData(output, x, y, [
+        //Red values increase in intensity with negative values.
+        pixel < 0 ? (((pixel * -1) - min) / (max - min)) * 255 : 0,
+
+        //Green values increase in intensity with positive values.
+        pixel > 0 ? ((pixel - min) / (max - min)) * 255 : 0,
+
+        //Blue values increase in intensity the closer the overall value
+        //is to 0.
+        //255 - Math.abs(image_2d[y][x]),
+        0,
+
+        //This will always produce an opaque image.
+        255
+      ]);
+    }
+  }
+
+
+  return output;
+}

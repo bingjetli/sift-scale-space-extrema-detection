@@ -1,4 +1,4 @@
-import { computeDoGChunk2D } from './src/dog.js';
+import { computeDoGChunk2D, convertDoGImage2DToImageData } from './src/dog.js';
 import { blurChunk2D } from './src/gaussian-blur.js';
 import { ImageDataEx } from './src/image-data-ex.js';
 import { createBlankImage2D, image2DToImageData, normalizeImage2D } from './src/image2d.js';
@@ -131,9 +131,13 @@ onmessage = e => {
 
       //Normalize the image_2d chunk, convert it to an ImageData and 
       //return that result back to the main thread.
+      //postMessage({
+      //  type: WorkerMessageTypes.DOG_CHUNK_RESULT,
+      //  chunkImageData: image2DToImageData(normalizeImage2D(dog_chunk_img2d)),
+      //});
       postMessage({
         type: WorkerMessageTypes.DOG_CHUNK_RESULT,
-        chunkImageData: image2DToImageData(normalizeImage2D(dog_chunk_img2d)),
+        chunkImageData: convertDoGImage2DToImageData(dog_chunk_img2d),
       });
       break;
 

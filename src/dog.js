@@ -166,10 +166,8 @@ export function convertDoGImage2DToImageData(image_2d) {
         //Green values increase in intensity with positive values.
         pixel > 0 ? ((pixel - min) / (max - min)) * 255 : 0,
 
-        //Blue values increase in intensity the closer the overall value
-        //is to 0.
-        //255 - Math.abs(image_2d[y][x]),
-        0,
+        //Blue values indicate zero crossing points.
+        255 - ((Math.abs(pixel) - min) / (max - min) * 255),
 
         //This will always produce an opaque image.
         255

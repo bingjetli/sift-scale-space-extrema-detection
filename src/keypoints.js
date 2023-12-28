@@ -54,6 +54,8 @@ export function getPotentialKeypoints(image_trio) {
 
       //Check if this pixel is an extrema.
       if (is_minima || is_maxima) {
+
+        //This pixel is an extrema.
         console.log(`${is_maxima && !is_minima ? 'Maxima' : is_minima && !is_maxima ? 'Minima' : is_maxima && is_minima ? 'Maxima & Minima' : 'Neither'} : ${center_pixel}`);
         console.log(neighbors);
       }

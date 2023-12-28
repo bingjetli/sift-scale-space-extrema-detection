@@ -1,6 +1,7 @@
-import { convertDoGImage2DToImageData } from './src/dog.js';
+import { computeDoGChunk2D, convertDoGImage2DToImageData } from './src/dog.js';
 import { blurChunk2D } from './src/gaussian-blur.js';
-import { createBlankImage2D, getImage2DDimensions, image2DLinearDownsample2x, image2DLinearUpsample2x, image2DToImageData } from './src/image2d.js';
+import { Image2DColorSpace, createBlankImage2D, getImage2DDimensions, image2DLinearDownsample2x, image2DLinearUpsample2x, image2DToImageData, setPixelForImageData } from './src/image2d.js';
+import { findDoGExtrema } from './src/keypoints.js';
 import { WorkerMessageTypes } from './src/worker.js';
 import { getImageChunkBoundaries } from './unused/image.js';
 
@@ -14,7 +15,6 @@ onmessage = e => {
 
 
   switch (message.type) {
-
     case WorkerMessageTypes.COMPUTE_GAUSSIAN_SCALE_SPACE:
       computeGaussianScaleSpace(
         message.inputImage,
@@ -29,6 +29,11 @@ onmessage = e => {
 
     case WorkerMessageTypes.COMPUTE_DIFFERENCE_OF_GAUSSIANS:
       computeDifferenceOfGaussians(message.scaleSpace);
+      break;
+
+
+    case WorkerMessageTypes.FIND_CANDIDATE_KEYPOINTS:
+      findCandidateKeypoints(message.differenceOfGaussians, message.octaveBaseImages);
       break;
 
 
@@ -226,23 +231,34 @@ function computeGaussianScaleSpace(
  *  image: Image2D,
  * }
  */
-function computeDifferenceOfGaussians(scale_space) {
+function computeDifferenceOfGaussians(scale_space, chunk_size = 32) {
 
   const difference_of_gaussians = [];
 
 
-  for (let octave = 0; octave < scale_space.length; octave++) {
+  //Cache the number of octaves as well as the scales per octave to
+  //avoid repeatedly dereferencing the array.
+  const number_of_octaves = scale_space.length;
+  const scales_per_octave = scale_space[0].length;
+
+
+  for (let octave = 0; octave < number_of_octaves; octave++) {
 
     const octave_images = [];
-    for (let scale = 1; scale < scale_space[octave].length; scale++) {
-
-      const [_width, _height] = getImage2DDimensions(scale_space[octave][scale].image);
+    for (let scale = 1; scale < scales_per_octave; scale++) {
 
 
-      //Cache a handle to the first and second image to calculate the
-      //difference of Gaussians on.
-      const first_image = scale_space[octave][scale - 1].image;
-      const second_image = scale_space[octave][scale].image;
+      //Retreive a handle to the base image and the adjacent image.
+      const base_image = scale_space[octave][scale - 1].image;
+      const adjacent_image = scale_space[octave][scale].image;
+
+
+      //Retreive the image dimensions of the base image.
+      const [_width, _height] = getImage2DDimensions(base_image);
+
+
+      //Split the base image into chunks.
+      const chunk_boundaries = getImageChunkBoundaries(_width, _height, chunk_size);
 
 
       //Create a blank image2D of the same dimensions as the current
@@ -250,12 +266,27 @@ function computeDifferenceOfGaussians(scale_space) {
       const output = createBlankImage2D(_height, _width);
 
 
-      for (let y = 0; y < _height; y++) {
-        for (let x = 0; x < _width; x++) {
+      const total_chunks = chunk_boundaries.length;
+      for (let chunk = 0; chunk < total_chunks; chunk++) {
 
-          //Calculate the difference of Gaussian for each pixel.
-          output[y][x] = second_image[y][x] - first_image[y][x];
-        }
+        //Cache a handle to the current chunk to prevent frequent
+        //array dereferencing.
+        const current_chunk = chunk_boundaries[chunk];
+
+
+        //Return a normalized DoG chunk back to the main thread to 
+        //update the main canvas.
+        postMessage({
+          type: WorkerMessageTypes.RECEIVED_DIFFERENCE_OF_GAUSSIAN_CHUNK,
+          imageData: convertDoGImage2DToImageData(computeDoGChunk2D(
+            base_image,
+            adjacent_image,
+            output,
+            current_chunk,
+          )),
+          dx: current_chunk.x1,
+          dy: current_chunk.y1,
+        });
       }
 
 
@@ -287,4 +318,84 @@ function computeDifferenceOfGaussians(scale_space) {
     type: WorkerMessageTypes.RECEIVED_DIFFERENCE_OF_GAUSSIANS,
     differenceOfGaussians: difference_of_gaussians,
   });
+}
+
+
+
+
+function findCandidateKeypoints(difference_of_gaussians, octave_base_images) {
+
+  const extremas = [];
+
+
+  //Cache the number of octaves as well as the scales per octave to
+  //avoid repeatedly dereferencing the array.
+  const number_of_octaves = difference_of_gaussians.length;
+  const number_of_scales = difference_of_gaussians[0].length;
+
+
+  for (let octave = 0; octave < number_of_octaves; octave++) {
+
+    //Retreive the image data of the octave's base image to mark the 
+    //candidate keypoints found.
+    const base_image = image2DToImageData(octave_base_images[octave]);
+
+    const octave_scales = [];
+    for (let scale = 1; scale < number_of_scales - 1; scale++) {
+
+
+      //Find the local extremas within the difference of Gaussians.
+      const local_extremas = findDoGExtrema([
+        difference_of_gaussians[octave][scale - 1].image,
+        difference_of_gaussians[octave][scale].image,
+        difference_of_gaussians[octave][scale + 1].image,
+      ]);
+
+
+      //Cache the length of the local extremas to prevent repeated
+      //array dereferencing in the for loop.
+      const total_local_extremas = local_extremas.length;
+
+
+      for (let i = 0; i < total_local_extremas; i++) {
+
+        const extrema = local_extremas[i];
+
+        //Highlight the pixel containing the extrema.
+        setPixelForImageData(base_image, extrema.x, extrema.y, [0, 255, 255, 255]);
+        setPixelForImageData(base_image, extrema.x + 1, extrema.y, [255, 255, 0, 255]);
+        setPixelForImageData(base_image, extrema.x + 1, extrema.y + 1, [255, 255, 0, 255]);
+        setPixelForImageData(base_image, extrema.x, extrema.y + 1, [255, 255, 0, 255]);
+        setPixelForImageData(base_image, extrema.x - 1, extrema.y + 1, [255, 255, 0, 255]);
+        setPixelForImageData(base_image, extrema.x - 1, extrema.y, [255, 255, 0, 255]);
+        setPixelForImageData(base_image, extrema.x - 1, extrema.y - 1, [255, 255, 0, 255]);
+        setPixelForImageData(base_image, extrema.x, extrema.y - 1, [255, 255, 0, 255]);
+        setPixelForImageData(base_image, extrema.x + 1, extrema.y - 1, [255, 255, 0, 255]);
+      }
+
+
+      //Return the ImageData containing the candidate keypoints back to
+      //the main thread to be displayed on the canvas.
+      postMessage({
+        type: WorkerMessageTypes.RECEIVED_CANDIDATE_KEYPOINT_IMAGE,
+        imageData: base_image,
+        octave: octave,
+      });
+
+
+      //Add the list of candidate keypoints to the octaves array.
+      octave_scales.push({
+        scaleLevel: scale,
+        localExtremas: local_extremas,
+      });
+    }
+
+
+    //Add the octave array to the array of candidate keypoint extremas.
+    extremas.push(octave_scales);
+  }
+
+
+  //Return the extremas found.
+  console.log(extremas);
 }

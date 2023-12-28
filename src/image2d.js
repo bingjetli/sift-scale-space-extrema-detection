@@ -65,6 +65,7 @@ export function imageDataToImage2D(image_data, colorspace = Image2DColorSpace.PE
 
 export const Image2DColorSpace = {
   PERCEPTION_GRAYSCALE: 'perception-grayscale',
+  RGB: 'rgb',
 };
 
 
@@ -73,7 +74,7 @@ export const Image2DColorSpace = {
 //corresponding to the RGBA value of the pixel. The pixel that is returned
 //cannot interact with the pixel data in the image data. This function
 //returns `null` if the `x` and `y` coordinates are out of bounds.
-function getPixelFromImageData(image_data, x, y) {
+export function getPixelFromImageData(image_data, x, y) {
   //If the x, y coordinates are out of bounds, return null since
   //there is no pixel data there.
   if (
@@ -102,7 +103,7 @@ function getPixelFromImageData(image_data, x, y) {
 //specified `image_data`. The `pixel` parameter takes an array of length
 //4 with each index corresponding to the pixel's RGBA value from 0-255.
 //This function does nothing if the `x` and `y` values are out of bounds.
-function setPixelForImageData(image_data, x, y, pixel) {
+export function setPixelForImageData(image_data, x, y, pixel) {
   //If the x, y coordinates are out of bounds, do nothing since
   //there is no pixel data there.
   if (

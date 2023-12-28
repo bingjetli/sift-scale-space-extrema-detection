@@ -1,6 +1,5 @@
 // @ts-nocheck
-import { setPixelForImageData } from '../unused/image.js';
-import { getImage2DDimensions } from './image2d.js';
+import { getImage2DDimensions, setPixelForImageData } from './image2d.js';
 
 
 

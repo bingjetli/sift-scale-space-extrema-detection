@@ -1,7 +1,10 @@
 import { getImage2DDimensions } from './image2d.js';
 
-export function getPotentialKeypoints(image_trio) {
+export function findDoGExtrema(image_trio) {
   const [width, height] = getImage2DDimensions(image_trio[0]);
+
+
+  const candidate_keypoints = [];
 
 
   for (let y = 1; y < height - 1; y++) {
@@ -56,11 +59,22 @@ export function getPotentialKeypoints(image_trio) {
       if (is_minima || is_maxima) {
 
         //This pixel is an extrema.
-        console.log(`${is_maxima && !is_minima ? 'Maxima' : is_minima && !is_maxima ? 'Minima' : is_maxima && is_minima ? 'Maxima & Minima' : 'Neither'} : ${center_pixel}`);
-        console.log(neighbors);
+        //console.log(`${is_maxima && !is_minima ? 'Maxima' : is_minima && !is_maxima ? 'Minima' : is_maxima && is_minima ? 'Maxima & Minima' : 'Neither'} : ${center_pixel}`);
+        //console.log(neighbors);
+
+
+        //Add the pixel coordinate to the candidate keypoints list.
+        candidate_keypoints.push({
+          x: x,
+          y: y,
+          pixelValue: center_pixel,
+        });
       }
     }
   }
+
+
+  return candidate_keypoints;
 }
 
 

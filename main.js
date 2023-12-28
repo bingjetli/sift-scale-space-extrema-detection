@@ -1,8 +1,8 @@
 //@ts-nocheck
 'use-strict';
 
-import { image2DToImageData, imageDataToImage2D } from './src/image2d.js';
-import { WorkerMessageTypes, workerComputeDifferenceOfGaussians, workerComputeGaussianScaleSpace } from './src/worker.js';
+import { getImage2DDimensions, image2DToImageData, imageDataToImage2D } from './src/image2d.js';
+import { WorkerMessageTypes, workerComputeDifferenceOfGaussians, workerComputeGaussianScaleSpace, workerFindCandidateKeypoints } from './src/worker.js';
 
 /**
  * REQUIREMENTS
@@ -21,10 +21,14 @@ const CHUNK_SIZE = 32;
 const MAX_OCTAVES = 4;
 const SCALE_LEVELS = 3;
 const INITIAL_BLUR = 1.6;
+
 let input_image_2d = null;
 let background_thread = null;
 let main_canvas = null;
 let main_canvas_context = null;
+
+let gaussian_scale_space = null;
+let difference_of_gaussians = null;
 
 
 
@@ -140,6 +144,20 @@ function onBackgroundThreadRespond(event) {
       onReceiveDifferenceOfGaussianImage(event.data);
       break;
 
+    case WorkerMessageTypes.RECEIVED_DIFFERENCE_OF_GAUSSIAN_CHUNK:
+      onReceiveDifferenceOfGaussianChunk(event.data);
+      break;
+
+
+    case WorkerMessageTypes.RECEIVED_DIFFERENCE_OF_GAUSSIANS:
+      onReceiveDifferenceOfGaussians(event.data);
+      break;
+
+
+    case WorkerMessageTypes.RECEIVED_CANDIDATE_KEYPOINT_IMAGE:
+      onReceiveCandidateKeypointImage(event.data);
+      break;
+
 
     default:
       console.log('main.js received the following :');
@@ -172,6 +190,18 @@ function onReceiveGaussianBlurredImage({ imageData, octave }) {
 
 
 function onReceiveGaussianScaleSpace({ scaleSpace }) {
+
+  //Cache the resulting Gaussian scale space.
+  gaussian_scale_space = scaleSpace;
+
+
+  //Resize the main canvas to the first image in the scale space before
+  //starting to compute the difference of Gaussians.
+  const [_width, _height] = getImage2DDimensions(scaleSpace[0][0].image);
+  main_canvas.width = _width;
+  main_canvas.height = _height;
+
+
   workerComputeDifferenceOfGaussians(background_thread, scaleSpace);
 }
 
@@ -187,6 +217,44 @@ function onReceiveDifferenceOfGaussianImage({ imageData, octave }) {
 
 
   addMainCanvasImageToDoGStackContainer(octave);
+}
+
+
+function onReceiveDifferenceOfGaussianChunk({ imageData, dx, dy }) {
+
+  //Update the main canvas with the received chunk image data.
+  main_canvas_context.putImageData(imageData, dx, dy);
+}
+
+
+
+
+function onReceiveDifferenceOfGaussians({ differenceOfGaussians }) {
+
+  //Cache the resulting difference of Gaussians.
+  difference_of_gaussians = differenceOfGaussians;
+
+  workerFindCandidateKeypoints(
+    background_thread,
+    differenceOfGaussians,
+    gaussian_scale_space.map(octave => octave[0].image),
+  );
+}
+
+
+
+
+function onReceiveCandidateKeypointImage({ imageData, octave }) {
+  //Resize the main canvas according to the current octave image.
+  if (main_canvas.width !== imageData.width) main_canvas.width = imageData.width;
+  if (main_canvas.height !== imageData.height) main_canvas.height = imageData.height;
+
+
+  //Update the main canvas image.
+  main_canvas_context.putImageData(imageData, 0, 0);
+
+
+  addMainCanvasImageToCandidateKeypointsContainer(octave);
 }
 
 
@@ -218,4 +286,18 @@ function addMainCanvasImageToDoGStackContainer(octave) {
 
 
   document.getElementById(`octave-${octave + 1}-dog-stack-container`).append(canvas);
+}
+
+
+
+
+
+function addMainCanvasImageToCandidateKeypointsContainer(octave) {
+  const canvas = document.createElement('canvas');
+  canvas.height = main_canvas.height;
+  canvas.width = main_canvas.width;
+  canvas.getContext('2d').putImageData(main_canvas_context.getImageData(0, 0, main_canvas.width, main_canvas.height), 0, 0);
+
+
+  document.getElementById(`octave-${octave + 1}-candidate-keypoints-container`).append(canvas);
 }

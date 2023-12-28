@@ -5,8 +5,12 @@ export const WorkerMessageTypes = {
   RECEIVED_GAUSSIAN_BLURRED_IMAGE: 'received-gaussian-blurred-image',
 
   COMPUTE_DIFFERENCE_OF_GAUSSIANS: 'compute-difference-of-gaussians',
-  RECEIVED_DIFFERENCE_OF_GAUSSIAN_IMAGE: 'received-difference-of-gaussian-image',
   RECEIVED_DIFFERENCE_OF_GAUSSIANS: 'received-difference-of-gaussians',
+  RECEIVED_DIFFERENCE_OF_GAUSSIAN_CHUNK: 'received-difference-of-gaussian-chunk',
+  RECEIVED_DIFFERENCE_OF_GAUSSIAN_IMAGE: 'received-difference-of-gaussian-image',
+
+  FIND_CANDIDATE_KEYPOINTS: 'find-candidate-keypoints',
+  RECEIVED_CANDIDATE_KEYPOINT_IMAGE: 'received-candidate-keypoint-image',
 };
 
 
@@ -41,5 +45,16 @@ export function workerComputeDifferenceOfGaussians(worker, scale_space) {
   worker.postMessage({
     type: WorkerMessageTypes.COMPUTE_DIFFERENCE_OF_GAUSSIANS,
     scaleSpace: scale_space,
+  });
+}
+
+
+
+
+export function workerFindCandidateKeypoints(worker, difference_of_gaussians, octave_base_images) {
+  worker.postMessage({
+    type: WorkerMessageTypes.FIND_CANDIDATE_KEYPOINTS,
+    differenceOfGaussians: difference_of_gaussians,
+    octaveBaseImages: octave_base_images,
   });
 }

@@ -2,6 +2,7 @@
 'use-strict';
 
 import { getImage2DDimensions, image2DToImageData, imageDataToImage2D } from './src/image2d.js';
+import { Matrix, MatrixDataType } from './src/matrix.js';
 import { WorkerMessageTypes, workerComputeDifferenceOfGaussians, workerComputeGaussianScaleSpace, workerFindCandidateKeypoints } from './src/worker.js';
 
 /**
@@ -106,6 +107,18 @@ window.onload = _ => {
           number_of_octaves: MAX_OCTAVES,
           scales_per_octave: SCALE_LEVELS,
         });
+
+
+        const m1 = new Matrix(2, 2, MatrixDataType.FLOAT32);
+        const m2 = new Matrix().initializeWith([
+          [1, 2, 3],
+          [4, 5, 6],
+          [7, 8, 9],
+        ], MatrixDataType.INT8);
+
+
+        console.log(`matrix 1 : ${m1.toString()}`);
+        console.log(`matrix 2 : ${m2.toString()}`);
       };
     };
   }
@@ -159,6 +172,16 @@ function onBackgroundThreadRespond(event) {
       break;
 
 
+    case WorkerMessageTypes.RECEIVED_CANDIDATE_KEYPOINT_BASE_IMAGE:
+      onReceiveCandidateKeypointBaseImage(event.data);
+      break;
+
+
+    case WorkerMessageTypes.RECEIVED_CANDIDATE_KEYPOINT_MARKER:
+      onReceiveCandidateKeypointMarker(event.data);
+      break;
+
+
     default:
       console.log('main.js received the following :');
       console.log(event.data);
@@ -186,6 +209,10 @@ function onReceiveGaussianBlurredImage({ imageData, octave }) {
 
 
   addMainCanvasImageToGaussianStackContainer(octave);
+
+
+  //Clear the current canvas
+  main_canvas_context.clearRect(0, 0, main_canvas.width, main_canvas.height);
 }
 
 
@@ -200,6 +227,7 @@ function onReceiveGaussianScaleSpace({ scaleSpace }) {
   const [_width, _height] = getImage2DDimensions(scaleSpace[0][0].image);
   main_canvas.width = _width;
   main_canvas.height = _height;
+  main_canvas_context.clearRect(0, 0, _width, _height);
 
 
   workerComputeDifferenceOfGaussians(background_thread, scaleSpace);
@@ -217,6 +245,9 @@ function onReceiveDifferenceOfGaussianImage({ imageData, octave }) {
 
 
   addMainCanvasImageToDoGStackContainer(octave);
+
+
+  main_canvas_context.clearRect(0, 0, imageData.width, imageData.height);
 }
 
 
@@ -238,6 +269,7 @@ function onReceiveDifferenceOfGaussians({ differenceOfGaussians }) {
     background_thread,
     differenceOfGaussians,
     gaussian_scale_space.map(octave => octave[0].image),
+    SCALE_LEVELS,
   );
 }
 
@@ -246,15 +278,38 @@ function onReceiveDifferenceOfGaussians({ differenceOfGaussians }) {
 
 function onReceiveCandidateKeypointImage({ imageData, octave }) {
   //Resize the main canvas according to the current octave image.
+  //if (main_canvas.width !== imageData.width) main_canvas.width = imageData.width;
+  //if (main_canvas.height !== imageData.height) main_canvas.height = imageData.height;
+
+
+  //Update the main canvas image.
+  //main_canvas_context.putImageData(imageData, 0, 0);
+
+
+  addMainCanvasImageToCandidateKeypointsContainer(octave);
+}
+
+
+
+
+
+function onReceiveCandidateKeypointBaseImage({ imageData, octave }) {
+  //Resize the main canvas according to the current octave image.
   if (main_canvas.width !== imageData.width) main_canvas.width = imageData.width;
   if (main_canvas.height !== imageData.height) main_canvas.height = imageData.height;
 
 
   //Update the main canvas image.
   main_canvas_context.putImageData(imageData, 0, 0);
+}
 
 
-  addMainCanvasImageToCandidateKeypointsContainer(octave);
+
+
+function onReceiveCandidateKeypointMarker({ x, y, isLowContrast }) {
+
+  main_canvas_context.fillStyle = isLowContrast ? '#f003' : 'yellow';
+  main_canvas_context.fillRect(x - 1, y - 1, 3, 3);
 }
 
 

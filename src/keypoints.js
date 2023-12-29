@@ -1,10 +1,30 @@
 import { getImage2DDimensions } from './image2d.js';
 
-export function findDoGExtrema(image_trio) {
+//Returns an object containing both the candidate keypoints found for
+//this image trio as well as the rejected low contrast keypoints.
+/**
+ * The returned object has the following schema :
+ * {
+ *  candidateKeypoints : [e, e, ..., e],
+ *  lowContrastKeypoints : [e, e, ..., e],
+ * }
+ * 
+ * where `e` represents an extrema. 
+ * 
+ * 
+ * An extrema has the following schema :
+ * {
+ *  x : Number
+ *  y : Number
+ *  value : Number
+ * }
+ */
+export function findDoGExtrema(image_trio, scales_per_octave) {
   const [width, height] = getImage2DDimensions(image_trio[0]);
 
 
   const candidate_keypoints = [];
+  const low_contrast_keypoints = [];
 
 
   for (let y = 1; y < height - 1; y++) {
@@ -59,27 +79,46 @@ export function findDoGExtrema(image_trio) {
       if (is_minima || is_maxima) {
 
         //This pixel is an extrema.
-        //console.log(`${is_maxima && !is_minima ? 'Maxima' : is_minima && !is_maxima ? 'Minima' : is_maxima && is_minima ? 'Maxima & Minima' : 'Neither'} : ${center_pixel}`);
-        //console.log(neighbors);
-
-
-        //Add the pixel coordinate to the candidate keypoints list.
-        candidate_keypoints.push({
+        //Create an object to store the extrema data.
+        const extrema = {
           x: x,
           y: y,
-          pixelValue: center_pixel,
-        });
+          value: center_pixel,
+        };
+
+
+        //Filter out low contrast keypoints before adding it to the list
+        //of candidate keypoints. There is a magic number threshold with 
+        //the value `0.015` for `3` scales per octave. There is a way to
+        //scale this value relative to the specified scales per octave.
+        const threshold = ((Math.pow(2, 1 / scales_per_octave) - 1) / (Math.pow(2, 1 / 3) - 1)) * 0.015;
+
+
+        //So now, if the difference of Gaussian value is less than this
+        //specified threshold, it is discarded. What's interesting, is 
+        //that the threshold is reduced even further by 80% in practice.
+        //It seems that this is done to reduce the amount of unneccessary
+        //computations and so a slightly more aggressive threshold is applied.
+        if (Math.abs(center_pixel) >= threshold * 0.8) {
+
+          //If the difference of Gaussians at this location passes the
+          //low contrast thresholding filter, we can then add this 
+          //pixel coordinate to the candidate keypoints list.
+          candidate_keypoints.push(extrema);
+        }
+        else {
+
+          //This is a low contrast keypoint, so we can add it to the list
+          //of rejected keypoints.
+          low_contrast_keypoints.push(extrema);
+        }
       }
     }
   }
 
 
-  return candidate_keypoints;
-}
-
-
-
-
-function isPixelAnExtremum(bot_layer, mid_layer, top_layer) {
-
+  return {
+    candidateKeypoints: candidate_keypoints,
+    lowContrastKeypoints: low_contrast_keypoints,
+  };
 }

@@ -33,7 +33,7 @@ onmessage = e => {
 
 
     case WorkerMessageTypes.FIND_CANDIDATE_KEYPOINTS:
-      findCandidateKeypoints(message.differenceOfGaussians, message.octaveBaseImages);
+      findCandidateKeypoints(e.data);
       break;
 
 
@@ -323,55 +323,62 @@ function computeDifferenceOfGaussians(scale_space, chunk_size = 32) {
 
 
 
-function findCandidateKeypoints(difference_of_gaussians, octave_base_images) {
+function findCandidateKeypoints({
+  differenceOfGaussians,
+  octaveBaseImages,
+  scalesPerOctave,
+}) {
 
   const extremas = [];
 
 
   //Cache the number of octaves as well as the scales per octave to
   //avoid repeatedly dereferencing the array.
-  const number_of_octaves = difference_of_gaussians.length;
-  const number_of_scales = difference_of_gaussians[0].length;
+  const number_of_octaves = differenceOfGaussians.length;
+  const number_of_scales = differenceOfGaussians[0].length;
 
 
   for (let octave = 0; octave < number_of_octaves; octave++) {
 
     //Retreive the image data of the octave's base image to mark the 
     //candidate keypoints found.
-    const base_image = image2DToImageData(octave_base_images[octave]);
+    const base_image = image2DToImageData(octaveBaseImages[octave]);
+
+
+    postMessage({
+      type: WorkerMessageTypes.RECEIVED_CANDIDATE_KEYPOINT_BASE_IMAGE,
+      imageData: base_image,
+    });
+
 
     const octave_scales = [];
     for (let scale = 1; scale < number_of_scales - 1; scale++) {
 
-
       //Find the local extremas within the difference of Gaussians.
-      const local_extremas = findDoGExtrema([
-        difference_of_gaussians[octave][scale - 1].image,
-        difference_of_gaussians[octave][scale].image,
-        difference_of_gaussians[octave][scale + 1].image,
-      ]);
+      const {
+        candidateKeypoints: local_extremas,
+        lowContrastKeypoints: low_contrast_extremas,
+      } = findDoGExtrema([
+        differenceOfGaussians[octave][scale - 1].image,
+        differenceOfGaussians[octave][scale].image,
+        differenceOfGaussians[octave][scale + 1].image,
+      ], scalesPerOctave);
 
 
-      //Cache the length of the local extremas to prevent repeated
-      //array dereferencing in the for loop.
-      const total_local_extremas = local_extremas.length;
+      low_contrast_extremas.forEach(extrema => postMessage({
+        type: WorkerMessageTypes.RECEIVED_CANDIDATE_KEYPOINT_MARKER,
+        x: extrema.x,
+        y: extrema.y,
+        isLowContrast: true,
+      }));
 
 
-      for (let i = 0; i < total_local_extremas; i++) {
-
-        const extrema = local_extremas[i];
-
-        //Highlight the pixel containing the extrema.
-        setPixelForImageData(base_image, extrema.x, extrema.y, [0, 255, 255, 255]);
-        setPixelForImageData(base_image, extrema.x + 1, extrema.y, [255, 255, 0, 255]);
-        setPixelForImageData(base_image, extrema.x + 1, extrema.y + 1, [255, 255, 0, 255]);
-        setPixelForImageData(base_image, extrema.x, extrema.y + 1, [255, 255, 0, 255]);
-        setPixelForImageData(base_image, extrema.x - 1, extrema.y + 1, [255, 255, 0, 255]);
-        setPixelForImageData(base_image, extrema.x - 1, extrema.y, [255, 255, 0, 255]);
-        setPixelForImageData(base_image, extrema.x - 1, extrema.y - 1, [255, 255, 0, 255]);
-        setPixelForImageData(base_image, extrema.x, extrema.y - 1, [255, 255, 0, 255]);
-        setPixelForImageData(base_image, extrema.x + 1, extrema.y - 1, [255, 255, 0, 255]);
-      }
+      local_extremas.forEach(extrema => postMessage({
+        type: WorkerMessageTypes.RECEIVED_CANDIDATE_KEYPOINT_MARKER,
+        x: extrema.x,
+        y: extrema.y,
+        isLowContrast: false,
+      }));
 
 
       //Return the ImageData containing the candidate keypoints back to

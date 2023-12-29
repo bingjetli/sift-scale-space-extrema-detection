@@ -11,6 +11,8 @@ export const WorkerMessageTypes = {
 
   FIND_CANDIDATE_KEYPOINTS: 'find-candidate-keypoints',
   RECEIVED_CANDIDATE_KEYPOINT_IMAGE: 'received-candidate-keypoint-image',
+  RECEIVED_CANDIDATE_KEYPOINT_BASE_IMAGE: 'received-candidate-keypoint-base-image',
+  RECEIVED_CANDIDATE_KEYPOINT_MARKER: 'received-candidate-keypoint-marker',
 };
 
 
@@ -51,10 +53,16 @@ export function workerComputeDifferenceOfGaussians(worker, scale_space) {
 
 
 
-export function workerFindCandidateKeypoints(worker, difference_of_gaussians, octave_base_images) {
+export function workerFindCandidateKeypoints(
+  worker,
+  difference_of_gaussians,
+  octave_base_images,
+  scales_per_octave
+) {
   worker.postMessage({
     type: WorkerMessageTypes.FIND_CANDIDATE_KEYPOINTS,
     differenceOfGaussians: difference_of_gaussians,
     octaveBaseImages: octave_base_images,
+    scalesPerOctave: scales_per_octave,
   });
 }

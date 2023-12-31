@@ -1,9 +1,9 @@
 //@ts-nocheck
-'use-strict';
+'use strict';
 
-import { getImage2DDimensions, image2DToImageData, imageDataToImage2D } from './src/image2d.js';
-import { Matrix, MatrixDataType } from './src/matrix.js';
-import { WorkerMessageTypes, workerComputeDifferenceOfGaussians, workerComputeGaussianScaleSpace, workerFindCandidateKeypoints } from './src/worker.js';
+import { ImageUtils_convertImageDataToMatrix2D, ImageUtils_convertMatrix2DToImageData } from './src/image-utils.js';
+import { Matrix2D_getDimensions } from './src/matrix2d.js';
+import { WorkerMessageTypes, workerComputeDifferenceOfGaussians, workerComputeGaussianScaleSpace, workerFindCandidateKeypoints, workerRefineCandidateKeypoints } from './src/worker.js';
 
 /**
  * REQUIREMENTS
@@ -19,11 +19,11 @@ import { WorkerMessageTypes, workerComputeDifferenceOfGaussians, workerComputeGa
 
 //Global Variables
 const CHUNK_SIZE = 32;
-const MAX_OCTAVES = 4;
+const MAX_OCTAVES = 5;
 const SCALE_LEVELS = 3;
-const INITIAL_BLUR = 1.6;
+const INITIAL_BLUR = 0.8;
 
-let input_image_2d = null;
+let input_image = null;
 let background_thread = null;
 let main_canvas = null;
 let main_canvas_context = null;
@@ -73,10 +73,14 @@ window.onload = _ => {
       //Wait for the image to load.
       image_element.onload = _ => {
 
+        //Cache a handle to the image dimensions.
+        const _width = image_element.width;
+        const _height = image_element.height;
+
         //Cache a handle to the main canvas and set the canvas dimensions.
         main_canvas = document.getElementById('main-canvas');
-        main_canvas.width = image_element.width * 2;
-        main_canvas.height = image_element.height * 2;
+        main_canvas.width = _width * 2;
+        main_canvas.height = _height * 2;
 
 
         //Cache a handle to the main canvas's context as well.
@@ -91,34 +95,26 @@ window.onload = _ => {
 
         //Convert the image to a grayscale Image2D array and draw it 
         //onto the main canvas.
-        //const ide = new ImageDataEx();
-        //ide.loadDataFrom(main_canvas_context.getImageData(0, 0, image_element.width, image_element.height));
-        //ide.printSelf();
-        input_image_2d = imageDataToImage2D(main_canvas_context.getImageData(0, 0, image_element.width, image_element.height));
-        main_canvas_context.putImageData(image2DToImageData(input_image_2d), 0, 0);
+        input_image = ImageUtils_convertImageDataToMatrix2D({
+          imageData: main_canvas_context.getImageData(0, 0, _width, _height),
+          convertToGrayscale: true,
+          usePerceptualGrayscale: true,
+          discardAlphaChannel: true,
+        });
+        main_canvas_context.putImageData(ImageUtils_convertMatrix2DToImageData(
+          _width, _height, { grayChannelMatrix: input_image },
+        ), 0, 0);
 
 
         //Now that the image is loaded, begin the SIFT algorithm by
         //generating the Gaussian Scale Space.
         workerComputeGaussianScaleSpace(background_thread, {
-          input_image: input_image_2d,
+          input_image: input_image,
           min_blur_level: INITIAL_BLUR,
           chunk_size: CHUNK_SIZE,
           number_of_octaves: MAX_OCTAVES,
           scales_per_octave: SCALE_LEVELS,
         });
-
-
-        const m1 = new Matrix(2, 2, MatrixDataType.FLOAT32);
-        const m2 = new Matrix().initializeWith([
-          [1, 2, 3],
-          [4, 5, 6],
-          [7, 8, 9],
-        ], MatrixDataType.INT8);
-
-
-        console.log(`matrix 1 : ${m1.toString()}`);
-        console.log(`matrix 2 : ${m2.toString()}`);
       };
     };
   }
@@ -182,6 +178,11 @@ function onBackgroundThreadRespond(event) {
       break;
 
 
+    case WorkerMessageTypes.RECEIVED_CANDIDATE_KEYPOINTS:
+      onReceiveCandidateKeypoints(event.data);
+      break;
+
+
     default:
       console.log('main.js received the following :');
       console.log(event.data);
@@ -224,7 +225,7 @@ function onReceiveGaussianScaleSpace({ scaleSpace }) {
 
   //Resize the main canvas to the first image in the scale space before
   //starting to compute the difference of Gaussians.
-  const [_width, _height] = getImage2DDimensions(scaleSpace[0][0].image);
+  const [_height, _width] = Matrix2D_getDimensions(scaleSpace[0][0].image);
   main_canvas.width = _width;
   main_canvas.height = _height;
   main_canvas_context.clearRect(0, 0, _width, _height);
@@ -310,6 +311,19 @@ function onReceiveCandidateKeypointMarker({ x, y, isLowContrast }) {
 
   main_canvas_context.fillStyle = isLowContrast ? '#f003' : 'yellow';
   main_canvas_context.fillRect(x - 1, y - 1, 3, 3);
+}
+
+
+
+
+function onReceiveCandidateKeypoints({ candidateKeypoints }) {
+  workerRefineCandidateKeypoints(
+    background_thread,
+    difference_of_gaussians,
+    candidateKeypoints,
+    SCALE_LEVELS,
+    MAX_OCTAVES,
+  );
 }
 
 

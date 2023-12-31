@@ -1,3 +1,7 @@
+//@ts-nocheck
+'use strict';
+
+
 import { getImage2DDimensions } from './image2d.js';
 
 //Returns an object containing both the candidate keypoints found for
@@ -99,7 +103,12 @@ export function findDoGExtrema(image_trio, scales_per_octave) {
         //that the threshold is reduced even further by 80% in practice.
         //It seems that this is done to reduce the amount of unneccessary
         //computations and so a slightly more aggressive threshold is applied.
-        if (Math.abs(center_pixel) >= threshold * 0.8) {
+        //The values of the image range between 0-255, so we multiply
+        //the calculated threshold by 255 to get the appropriate 
+        //threshold value for this range.
+        const pixel_threshold = (threshold * 0.8) * 255;
+        console.log(pixel_threshold);
+        if (Math.abs(center_pixel) >= pixel_threshold) {
 
           //If the difference of Gaussians at this location passes the
           //low contrast thresholding filter, we can then add this 
@@ -122,3 +131,42 @@ export function findDoGExtrema(image_trio, scales_per_octave) {
     lowContrastKeypoints: low_contrast_keypoints,
   };
 }
+
+
+
+
+/**
+ * This function takes a `matrix cube` in order to perform calculations.
+ * It has the following schema :
+ * [
+ *  m,  -1
+ *  m,   |
+ *  m,   v
+ * ]    +1
+ *      (s)
+ *
+ *
+ * where `m` is a Column-Major `Matrix` with the following schema :
+ * [
+ *  [p, p, p],  -1 ---> +1 (y)
+ *  [p, p, p],   |
+ *  [p, p, p],   v
+ * ]            +1
+ *              (x)
+ *
+ *
+ * where `p` is an image pixel.
+ */
+//export function approximateGradientUsingFiniteDifferences(matrix_cube) {
+//
+//  //The calculations are done with the assumption that `m` correspond
+//  //with the image x coordinate, and `n` correspond with the image y
+//  //coordinate. Since matrices are implemented with a Column Major
+//  //scheme, movement along the x axis corresponds to picking the
+//  //column (j) in the matrix. Likewise, movement along the y-axis
+//  //corresponds to picking the row (i) in the matrix.
+//  return new Matrix(3, 1, MatrixDataType.FLOAT32)
+//    .setValue(0, 0, (matrix_cube[2].getValue(1, 1) - matrix_cube[0].getValue(1, 1)) / 2)
+//    .setValue(1, 0, (matrix_cube[1].getValue(1, 2) - matrix_cube[1].getValue(1, 0)) / 2)
+//    .setValue(2, 0, (matrix_cube[1].getValue(2, 1) - matrix_cube[1].getValue(0, 1)) / 2);
+//}

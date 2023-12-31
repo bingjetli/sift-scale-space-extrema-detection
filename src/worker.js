@@ -1,3 +1,7 @@
+//@ts-nocheck
+'use strict';
+
+
 export const WorkerMessageTypes = {
   COMPUTE_GAUSSIAN_SCALE_SPACE: 'compute-gaussian-scale-space',
   RECEIVED_GAUSSIAN_SCALE_SPACE: 'received-gaussian-scale-space',
@@ -13,6 +17,9 @@ export const WorkerMessageTypes = {
   RECEIVED_CANDIDATE_KEYPOINT_IMAGE: 'received-candidate-keypoint-image',
   RECEIVED_CANDIDATE_KEYPOINT_BASE_IMAGE: 'received-candidate-keypoint-base-image',
   RECEIVED_CANDIDATE_KEYPOINT_MARKER: 'received-candidate-keypoint-marker',
+  RECEIVED_CANDIDATE_KEYPOINTS: 'received-candidate-keypoints',
+
+  REFINE_CANDIDATE_KEYPOINTS: 'refine-candidate-keypoints',
 };
 
 
@@ -22,7 +29,7 @@ export function workerComputeGaussianScaleSpace(
   worker,
   {
     input_image,
-    number_of_octaves = 4,
+    number_of_octaves = 5,
     scales_per_octave = 3,
     min_blur_level = 0.8,
     assumed_blur = 0.5,
@@ -64,5 +71,24 @@ export function workerFindCandidateKeypoints(
     differenceOfGaussians: difference_of_gaussians,
     octaveBaseImages: octave_base_images,
     scalesPerOctave: scales_per_octave,
+  });
+}
+
+
+
+
+export function workerRefineCandidateKeypoints(
+  worker,
+  difference_of_gaussians,
+  candidate_keypoints,
+  scales_per_octave,
+  number_of_octaves,
+) {
+  worker.postMessage({
+    type: WorkerMessageTypes.REFINE_CANDIDATE_KEYPOINTS,
+    differenceOfGaussians: difference_of_gaussians,
+    scalesPerOctave: scales_per_octave,
+    candidateKeypoints: candidate_keypoints,
+    numberOfOctaves: number_of_octaves,
   });
 }

@@ -6,11 +6,9 @@
   <title>SIFT : Scale Space Extrema Detection</title>
   <link rel="stylesheet" type="text/css" href="styles.css">
   <script type="module" src="src/worker.js"></script>
-  <script type="module" src="src/image2d.js"></script>
-  <script type="module" src="src/dog.js"></script>
-  <script type="module" src="src/gaussian-blur.js"></script>
-  <script type="module" src="src/keypoints.js"></script>
-  <script type="module" src="src/image-data-ex.js"></script>
+  <script type="module" src="src/image-utils.js"></script>
+  <script type="module" src="src/matrix2d.js"></script>
+  <script type="module" src="src/sift.js"></script>
   <script type="module" src="main.js"></script>
 </head>
 
@@ -43,6 +41,10 @@
       <h3>Octave 4</h3>
       <div id="octave-4-gaussian-stack-container" class="scale-space-stack-container">
       </div>
+
+      <h3>Octave 5</h3>
+      <div id="octave-5-gaussian-stack-container" class="scale-space-stack-container">
+      </div>
     </div>
 
     <h2>Difference of Gaussian Stack</h2>
@@ -62,6 +64,10 @@
       <h3>Octave 4</h3>
       <div id="octave-4-dog-stack-container" class="scale-space-stack-container">
       </div>
+
+      <h3>Octave 5</h3>
+      <div id="octave-5-dog-stack-container" class="scale-space-stack-container">
+      </div>
     </div>
 
     <h2>Candidate Keypoints</h2>
@@ -80,6 +86,10 @@
 
       <h3>Octave 4</h3>
       <div id="octave-4-candidate-keypoints-container" class="scale-space-stack-container">
+      </div>
+
+      <h3>Octave 5</h3>
+      <div id="octave-5-candidate-keypoints-container" class="scale-space-stack-container">
       </div>
     </div>
 

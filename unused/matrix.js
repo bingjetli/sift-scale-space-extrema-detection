@@ -154,4 +154,18 @@ export class Matrix {
     }
     else return 'This matrix is not initialized.';
   }
+
+
+  setValue(i, j, value) {
+    this.data[j * this.rows + i] = value;
+
+
+    //Allow method chaining after setting a value.
+    return this;
+  }
+
+
+  getValue(i, j) {
+    return this.data[j * this.rows + i];
+  }
 }

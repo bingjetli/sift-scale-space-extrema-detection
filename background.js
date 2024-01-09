@@ -2,8 +2,8 @@
 'use strict';
 
 import { ImageUtils_convertMatrix2DToImageData, ImageUtils_generateChunkBoundaries } from './src/image-utils.js';
-import { Matrix2D_build, Matrix2D_getDimensions, Matrix2D_linearResize, Matrix2D_sampledNormalize, Matrix2D_sigmoidNormalize } from './src/matrix2d.js';
-import { SIFT_blurMatrix2DChunk, SIFT_findExtremas, SIFT_subtractMatrix2DChunk } from './src/sift.js';
+import { Matrix2D_build, Matrix2D_get3x3Inverse, Matrix2D_getDimensions, Matrix2D_linearResize, Matrix2D_sampledNormalize, Matrix2D_scalarMultiply, Matrix2D_sigmoidNormalize, Matrix2D_vectorMultiply } from './src/matrix2d.js';
+import { SIFT_blurMatrix2DChunk, SIFT_findExtremas, SIFT_generateGradientVector, SIFT_generateHessianMatrix, SIFT_subtractMatrix2DChunk } from './src/sift.js';
 import { WorkerMessageTypes } from './src/worker.js';
 
 console.log('background.js is running');
@@ -457,17 +457,22 @@ function refineCandidateKeypoints({
   scalesPerOctave,
   numberOfOctaves,
   candidateKeypoints,
+  minBlurLevel,
+  minInterpixelDistance = 0.5,
 }) {
 
   for (let octave = 0; octave < numberOfOctaves; octave++) {
     for (let scale_i = 0; scale_i < scalesPerOctave; scale_i++) {
 
-      const scale = candidateKeypoints[octave][scale_i].scaleLevel;
       candidateKeypoints[octave][scale_i].localExtremas.forEach(extrema => {
 
         //For each discrete extrema, we need the scale level `s`, and
         //the discrete positions `m` and `n` corresponding to the discrete
         //`x` and `y` values.
+        let is_discarded = true;
+        let s = candidateKeypoints[octave][scale_i].scaleLevel;
+        let m = extrema.y; //Row
+        let n = extrema.x; //Column
         for (let i = 0; i < 5; i++) {
 
           //For each discrete extrema, we will try to perform the 
@@ -476,7 +481,7 @@ function refineCandidateKeypoints({
 
           //Try to perform the quadratic interpolation.
           let interpolation_offset = null;
-          let interpolation_result = null;
+          let interpolated_value = null;
 
 
           //Compute the 3D Gradient using the finite differences method.
@@ -489,21 +494,15 @@ function refineCandidateKeypoints({
            * | n |
            * +- -+
            * 
+           * where `s` refers to the scale space, `m` refers to the row
+           * of the image and `n` refers to the column of the image.
+           * 
            */
-          const gradient = {
-            s: (
-              differenceOfGaussians[octave][scale + 1].image[extrema.y][extrema.x] -
-              differenceOfGaussians[octave][scale - 1].image[extrema.y][extrema.x]
-            ) / 2,
-            m: (
-              differenceOfGaussians[octave][scale].image[extrema.y][extrema.x + 1] -
-              differenceOfGaussians[octave][scale].image[extrema.y][extrema.x - 1]
-            ) / 2,
-            n: (
-              differenceOfGaussians[octave][scale].image[extrema.y + 1][extrema.x] -
-              differenceOfGaussians[octave][scale].image[extrema.y - 1][extrema.x]
-            ) / 2,
-          };
+          const gradient_vector = SIFT_generateGradientVector(
+            octave, s, m, n,
+            differenceOfGaussians
+          );
+
 
 
           //Compute the Hessian Matrix using the finite differences method.
@@ -517,41 +516,10 @@ function refineCandidateKeypoints({
            * +-           -+
            * 
            */
-          const hessian = {
-            h11: (
-              differenceOfGaussians[octave][scale + 1].image[extrema.y][extrema.x] +
-              differenceOfGaussians[octave][scale - 1].image[extrema.y][extrema.x] -
-              (2 * differenceOfGaussians[octave][scale].image[extrema.y][extrema.x])
-            ),
-            h22: (
-              differenceOfGaussians[octave][scale].image[extrema.y][extrema.x + 1] +
-              differenceOfGaussians[octave][scale].image[extrema.y][extrema.x - 1] -
-              (2 * differenceOfGaussians[octave][scale].image[extrema.y][extrema.x])
-            ),
-            h33: (
-              differenceOfGaussians[octave][scale].image[extrema.y + 1][extrema.x] +
-              differenceOfGaussians[octave][scale].image[extrema.y - 1][extrema.x] -
-              (2 * differenceOfGaussians[octave][scale].image[extrema.y][extrema.x])
-            ),
-            h12: (
-              differenceOfGaussians[octave][scale + 1].image[extrema.y][extrema.x + 1] -
-              differenceOfGaussians[octave][scale + 1].image[extrema.y][extrema.x - 1] -
-              differenceOfGaussians[octave][scale - 1].image[extrema.y][extrema.x + 1] +
-              differenceOfGaussians[octave][scale - 1].image[extrema.y][extrema.x - 1]
-            ) / 4,
-            h13: (
-              differenceOfGaussians[octave][scale + 1].image[extrema.y + 1][extrema.x] -
-              differenceOfGaussians[octave][scale + 1].image[extrema.y - 1][extrema.x] -
-              differenceOfGaussians[octave][scale - 1].image[extrema.y + 1][extrema.x] +
-              differenceOfGaussians[octave][scale - 1].image[extrema.y - 1][extrema.x]
-            ) / 4,
-            h23: (
-              differenceOfGaussians[octave][scale].image[extrema.y + 1][extrema.x + 1] -
-              differenceOfGaussians[octave][scale].image[extrema.y - 1][extrema.x + 1] -
-              differenceOfGaussians[octave][scale].image[extrema.y + 1][extrema.x - 1] +
-              differenceOfGaussians[octave][scale].image[extrema.y - 1][extrema.x - 1]
-            ) / 4,
-          };
+          const hessian_matrix = SIFT_generateHessianMatrix(
+            octave, s, m, n,
+            differenceOfGaussians
+          );
 
 
           /** CALCULATING THE INTERPOLATION VALUE AND INTERPOLATION OFFSET
@@ -571,211 +539,98 @@ function refineCandidateKeypoints({
            * alpha = -(1 / hessian) * gradient
            * 
            */
-
-          //Since calculating the interpolation offset involves calculating
-          //the inverse of the Hessian Matrix, so we start by calculating
-          //the determinant of the Hessian Matrix since we can only find
-          //an inverse of a Matrix if the determinant is not 0.
-
-          /** CALCULATING THE DETERMINANT OF A 3x3 MATRIX
-           * 
-           * Given a 3x3 matrix with the scheme :
-           * 
-           * +-     -+
-           * | a b c |
-           * | d e f |
-           * | g h i |
-           * +-     -+
-           * 
-           * The determinant of this matrix is given by :
-           *  a * minor(a) - b * minor(b) + c * minor(c)
-           * 
-           * where the `minor(§)` is given by the determinant of the resulting
-           * matrix when the column and row containing `§` is removed.
-           * 
-           * 
-           * The final formula is given by : a(ei - fh) - b(di - fg) + c(dh - eg)
-           * 
-           * 
-           ** CALCULATING THE DETERMINANT OF A 2x2 MATRIX
-           * 
-           * Given a 2x2 matrix with the scheme :
-           * 
-           * +-   -+
-           * | a b |
-           * | c d |
-           * +-   -+
-           * 
-           * The determinant of this matrix is given by :
-           * ad - bc
-           * 
-           * 
-           */
-
-          //Compute and cache the first 3 minors to use in order to 
-          //calculate the determinant of the hessian matrix.
-          const minor_h11 = ((hessian.h22 * hessian.h33) - (hessian.h23 * hessian.h23));
-          const minor_h12 = ((hessian.h12 * hessian.h33) - (hessian.h23 * hessian.h13));
-          const minor_h13 = ((hessian.h12 * hessian.h23) - (hessian.h22 * hessian.h13));
-
-
-          //Calculate the determinant using the minors calculated earlier.
-          const hessian_determinant = (hessian.h11 * minor_h11) -
-            (hessian.h12 * minor_h12) +
-            (hessian.h13 * minor_h13);
-
-
-          //EPSILON is the smallest increment between 1.0 and the next
-          //number following 1.0. Therefore determinant values smaller
-          //than this EPSILON value is treated as effectively zero since
-          //floating point math becomes inaccurate after a certain level
-          //of precision. Since the determinant is effectively zero,
-          //we treat it as such, and an inverse cannot be calculated
-          //for matrices with a determinant of 0.
-          if (hessian_determinant < Number.EPSILON) break;
-
-
-          //If the determinant is valid, then we calculate the minor
-          //matrix for the Hessian in order to calculate the cofactors.
-          const minor = {
-            h11: minor_h11,
-            h12: minor_h12,
-            h13: minor_h13,
-            h21: ((hessian.h12 * hessian.h33) - (hessian.h13 * hessian.h23)),
-            h22: ((hessian.h11 * hessian.h33) - (hessian.h13 * hessian.h13)),
-            h23: ((hessian.h11 * hessian.h23) - (hessian.h12 * hessian.h13)),
-            h31: ((hessian.h12 * hessian.h23) - (hessian.h13 * hessian.h22)),
-            h32: ((hessian.h11 * hessian.h23) - (hessian.h13 * hessian.h12)),
-            h33: ((hessian.h11 * hessian.h22) - (hessian.h12 * hessian.h12)),
-          };
-
-
-          //Now calculate the cofactor matrix for the Hessian.
-          const cofactors = {
-            h11: minor.h11,
-            h12: minor.h12 * -1,
-            h13: minor.h13,
-            h21: minor.h21 * -1,
-            h22: minor.h22,
-            h23: minor.h23 * -1,
-            h31: minor.h31,
-            h32: minor.h32 * -1,
-            h33: minor.h33,
-          };
-
-
-          //Transposing the cofactor matrix will now give the adjunct
-          //matrix which can be scalar divided by the determinant to
-          //produce the inverse of the Hessian matrix.
-          /** TRANSPOSING MATRICES
-           * 
-           * Transposing a matrix means to switch its columns with its
-           * rows. So given a 3x3 matrix of the following schema :
-           * 
-           * +-        -+
-           * | 11 12 13 |
-           * | 21 22 23 |
-           * | 31 32 33 |
-           * +-        -+
-           * 
-           * The transpose of this matrix will be :
-           * 
-           * +-        -+
-           * | 11 21 31 |
-           * | 12 22 32 |
-           * | 13 23 33 |
-           * +-        -+
-           * 
-           */
-          const adjunct = {
-            h11: cofactors.h11,
-            h12: cofactors.h21,
-            h13: cofactors.h31,
-            h21: cofactors.h12,
-            h22: cofactors.h22,
-            h23: cofactors.h32,
-            h31: cofactors.h13,
-            h32: cofactors.h23,
-            h33: cofactors.h33,
-          };
-
-
-          const hessian_inverse = {
-            h11: adjunct.h11 / hessian_determinant,
-            h12: adjunct.h12 / hessian_determinant,
-            h13: adjunct.h13 / hessian_determinant,
-            h21: adjunct.h21 / hessian_determinant,
-            h22: adjunct.h22 / hessian_determinant,
-            h23: adjunct.h23 / hessian_determinant,
-            h31: adjunct.h31 / hessian_determinant,
-            h32: adjunct.h32 / hessian_determinant,
-            h33: adjunct.h33 / hessian_determinant,
-          };
-
-
-          //Debugging the matrix calculations
-          //
-          //console.log('----');
-          //console.log('Determinant : ' + hessian_determinant);
-          //console.log(
-          //  'Hessian : \n' +
-          //  hessian.h11 + ' ' + hessian.h12 + ' ' + hessian.h13 + '\n' +
-          //  hessian.h12 + ' ' + hessian.h22 + ' ' + hessian.h23 + '\n' +
-          //  hessian.h13 + ' ' + hessian.h23 + ' ' + hessian.h33 + '\n'
-          //);
-          //console.log(
-          //  'Hessian Minors : \n' +
-          //  minor.h11 + ' ' + minor.h12 + ' ' + minor.h13 + '\n' +
-          //  minor.h21 + ' ' + minor.h22 + ' ' + minor.h23 + '\n' +
-          //  minor.h31 + ' ' + minor.h32 + ' ' + minor.h33 + '\n'
-          //);
-          //console.log(
-          //  'Hessian Cofactors : \n' +
-          //  cofactors.h11 + ' ' + cofactors.h12 + ' ' + cofactors.h13 + '\n' +
-          //  cofactors.h21 + ' ' + cofactors.h22 + ' ' + cofactors.h23 + '\n' +
-          //  cofactors.h31 + ' ' + cofactors.h32 + ' ' + cofactors.h33 + '\n'
-          //);
-          //console.log(
-          //  'Hessian Adjunct / Cofactors Transposed : \n' +
-          //  adjunct.h11 + ' ' + adjunct.h12 + ' ' + adjunct.h13 + '\n' +
-          //  adjunct.h21 + ' ' + adjunct.h22 + ' ' + adjunct.h23 + '\n' +
-          //  adjunct.h31 + ' ' + adjunct.h32 + ' ' + adjunct.h33 + '\n'
-          //);
-          //console.log(
-          //  'Hessian Inverse : \n' +
-          //  hessian_inverse.h11 + ' ' + hessian_inverse.h12 + ' ' + hessian_inverse.h13 + '\n' +
-          //  hessian_inverse.h21 + ' ' + hessian_inverse.h22 + ' ' + hessian_inverse.h23 + '\n' +
-          //  hessian_inverse.h31 + ' ' + hessian_inverse.h32 + ' ' + hessian_inverse.h33 + '\n'
-          //);
-          //console.log(
-          //  'Hessian x Hessian Inverse : \n' +
-          //  Math.round((hessian.h11 * hessian_inverse.h11) + (hessian.h12 * hessian_inverse.h21) + (hessian.h13 * hessian_inverse.h31)) + ' ' +
-          //  Math.round((hessian.h11 * hessian_inverse.h12) + (hessian.h12 * hessian_inverse.h22) + (hessian.h13 * hessian_inverse.h32)) + ' ' +
-          //  Math.round((hessian.h11 * hessian_inverse.h13) + (hessian.h12 * hessian_inverse.h23) + (hessian.h13 * hessian_inverse.h33)) + '\n' +
-          //  Math.round((hessian.h12 * hessian_inverse.h11) + (hessian.h22 * hessian_inverse.h21) + (hessian.h23 * hessian_inverse.h31)) + ' ' +
-          //  Math.round((hessian.h12 * hessian_inverse.h12) + (hessian.h22 * hessian_inverse.h22) + (hessian.h23 * hessian_inverse.h32)) + ' ' +
-          //  Math.round((hessian.h12 * hessian_inverse.h13) + (hessian.h22 * hessian_inverse.h23) + (hessian.h23 * hessian_inverse.h33)) + '\n' +
-          //  Math.round((hessian.h13 * hessian_inverse.h11) + (hessian.h23 * hessian_inverse.h21) + (hessian.h33 * hessian_inverse.h31)) + ' ' +
-          //  Math.round((hessian.h13 * hessian_inverse.h12) + (hessian.h23 * hessian_inverse.h22) + (hessian.h33 * hessian_inverse.h32)) + ' ' +
-          //  Math.round((hessian.h13 * hessian_inverse.h13) + (hessian.h23 * hessian_inverse.h23) + (hessian.h33 * hessian_inverse.h33)) + '\n'
-          //);
-          //console.log('----');
+          const hessian_inverse = Matrix2D_get3x3Inverse(hessian_matrix);
 
 
           //Now the interpolation offset is calculated by multiplying
           //the Gradient vector by the Negative Inverse of the Hessian.
-          interpolation_offset = [
-            (((hessian_inverse.h11 * -1) * gradient.s) + ((hessian_inverse.h12 * -1) * gradient.m) + ((hessian_inverse.h13) * gradient.n)),
-            (((hessian_inverse.h21 * -1) * gradient.s) + ((hessian_inverse.h22 * -1) * gradient.m) + ((hessian_inverse.h23) * gradient.n)),
-            (((hessian_inverse.h31 * -1) * gradient.s) + ((hessian_inverse.h32 * -1) * gradient.m) + ((hessian_inverse.h33) * gradient.n)),
-          ];
+          interpolation_offset = Matrix2D_vectorMultiply(
+            Matrix2D_scalarMultiply(hessian_inverse, -1),
+            gradient_vector
+          );
 
 
-          //Now the interpolation offset is calculated by first multiplying
-          //the G
+          //Now that we have the interpolation offset, test for validity.
+          if (interpolation_offset.every(element => Math.abs(element) < 0.6)) {
+
+            //This is a valid keypoint, break at the end of this block.
+            //Since this is a valid keypoint, calculate the interpolation
+            //value so we can determine whether or not to discard this
+            //keypoint due to low contrast. The interpolation value
+            //is given by `extrema + 0.5 * transpose(interpolation_offset) * gradient`
+            interpolated_value = extrema.value + (((0.5 * interpolation_offset[0]) * gradient_vector[0]) + ((0.5 * interpolation_offset[1]) * gradient_vector[1]) + ((0.5 * interpolation_offset[2]) * gradient_vector[2]));
 
 
-          break;
+            //Filter out low contrast keypoints before adding it to the list
+            //of candidate keypoints. There is a magic number threshold with 
+            //the value `0.015` for `3` scales per octave. There is a way to
+            //scale this value relative to the specified scales per octave.
+            const threshold = ((Math.pow(2, 1 / scalesPerOctave) - 1) / (Math.pow(2, 1 / 3) - 1)) * 0.015;
+
+
+            if (Math.abs(interpolated_value) >= threshold) {
+
+              //If the interpolated value passes the threshold, then we
+              //can calculate the keypoint's absolute coordinates and add 
+              //it to the list of interpolated keypoints.
+              is_discarded = false;
+              const octave_interpixel_distance = Math.pow(2, octave - 1);
+              const absolute_y = octave_interpixel_distance * (interpolation_offset[1] + m);
+              const absolute_x = octave_interpixel_distance * (interpolation_offset[2] + n);
+              const absolute_sigma = (octave_interpixel_distance / minInterpixelDistance) * minBlurLevel * Math.pow(2, (interpolation_offset[0] + s) / scalesPerOctave);
+              console.log(`Keypoint found at (${absolute_x}, ${absolute_y}) with absolute sigma : ${absolute_sigma}`);
+            }
+            else {
+
+              //Otherwise, if it fails, then it is discarded due to 
+              //being a low contrast keypoint.
+              console.log(`interpolated keypoint at Octave ${octave}, Scale ${s}, ( ${n}, ${m}) failed to pass the contrast threshold test with a value of ${interpolated_value}.`);
+            }
+
+
+            break;
+          }
+
+
+          //If we haven't broken out of the loop yet, that means we
+          //haven't found a valid interpolation offset yet. So we move
+          //the discrete s, m and n values to the next closest discrete
+          //value to (s, m, n) + interpolation_offset.
+          s = Math.round(s + interpolation_offset[0]);
+          m = Math.round(m + interpolation_offset[1]);
+          n = Math.round(n + interpolation_offset[2]);
+
+
+          //Validate the updated (s, m, n) values.
+          if (s < 1 || s >= differenceOfGaussians[octave].length - 1) {
+
+            //This means the extremum failed to converge before it
+            //reached outside the scale space.
+            console.log(`candidate keypoint at Octave ${octave}, Scale ${scale_i}, ( ${extrema.x}, ${extrema.y}) failed to converge before exiting scale space.`);
+            break;
+          }
+          if (m < 1 || m >= differenceOfGaussians[octave][s].image.length - 1) {
+
+            //This means the extremum failed to converge before it
+            //reached outside the valid image rows.
+            console.log(`candidate keypoint at Octave ${octave}, Scale ${scale_i}, ( ${extrema.x}, ${extrema.y}) failed to converge before exiting the image y-dimension.`);
+            break;
+          }
+          if (n < 1 || n >= differenceOfGaussians[octave][s].image[m].length - 1) {
+
+            //This means the extremum failed to converge before it
+            //reached outside the valid image columns.
+            console.log(`candidate keypoint at Octave ${octave}, Scale ${scale_i}, ( ${extrema.x}, ${extrema.y}) failed to converge before exiting the image x-dimension.`);
+            break;
+          }
+
+
+          //If the s, m, n values are valid, the loop proceeds normally.
+        }
+
+
+        if (is_discarded === true) {
+          console.log(`candidate keypoint at Octave ${octave}, Scale_i ${scale_i}, ( ${extrema.x}, ${extrema.y}) is discarded...`);
         }
       });
 

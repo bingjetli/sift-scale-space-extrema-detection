@@ -323,6 +323,7 @@ function onReceiveCandidateKeypoints({ candidateKeypoints }) {
     candidateKeypoints,
     SCALE_LEVELS,
     MAX_OCTAVES,
+    INITIAL_BLUR,
   );
 }
 

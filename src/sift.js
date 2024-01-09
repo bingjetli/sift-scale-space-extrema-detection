@@ -314,3 +314,134 @@ export function SIFT_findExtremas(image_trio, scales_per_octave) {
     lowContrastKeypoints: low_contrast_keypoints,
   };
 }
+
+
+
+
+/**
+ * 
+ * @param {uint} o The octave of the candidate keypoint entrema.
+ * @param {uint} s The `scale level` of the candidate keypoint extrema.
+ * @param {uint} m The `row` of the candidate keypoint extrema.
+ * @param {uint} n The `column` of the candidate keypoint extrema.
+ * @param {DifferenceOfGaussians} difference_of_gaussians The array 
+ * containing the Difference of Gaussians.
+ * @returns The calculated Gradient Vector to be used in the calculation
+ * of the Interpolation Offset & Value. The gradient vector has the
+ * schema [s, m, n].
+ */
+export function SIFT_generateGradientVector(o, s, m, n, difference_of_gaussians) {
+  return [
+    //The `s` term, referenced by `gradient_vector[0]`
+    (
+      difference_of_gaussians[o][s + 1].image[m][n] -
+      difference_of_gaussians[o][s - 1].image[m][n]
+    ) / 2,
+
+    //The `m` term, referenced by `gradient_vector[1]`
+    (
+      difference_of_gaussians[o][s].image[m + 1][n] -
+      difference_of_gaussians[o][s].image[m - 1][n]
+    ) / 2,
+
+    //The `n` term, referenced by `gradient_vector[2]`
+    (
+      difference_of_gaussians[o][s].image[m][n + 1] -
+      difference_of_gaussians[o][s].image[m][n - 1]
+    ) / 2,
+  ];
+}
+
+
+
+
+/**
+ * 
+ * @param {uint} o The octave of the candidate keypoint entrema.
+ * @param {uint} s The `scale level` of the candidate keypoint extrema.
+ * @param {uint} m The `row` of the candidate keypoint extrema.
+ * @param {uint} n The `column` of the candidate keypoint extrema.
+ * @param {DifferenceOfGaussians} difference_of_gaussians The array 
+ * containing the Difference of Gaussians.
+ * @returns A `Matrix2D` containing the Hessian Matrix to be used in 
+ * the calculation of the Interpolation Offset and Value. The Hessian
+ * Matrix contains the following schema : 
+ * 
+ * [
+ *  [h11, h12, h13],
+ *  [h21, h22, h23],
+ *  [h31, h32, h33],
+ * ]
+ * 
+ */
+export function SIFT_generateHessianMatrix(o, s, m, n, difference_of_gaussians) {
+
+  //First, calculate the main values of the Hessian Matrix.
+  const h11 = (
+    difference_of_gaussians[o][s + 1].image[m][n] +
+    difference_of_gaussians[o][s - 1].image[m][n] -
+    (2 * difference_of_gaussians[o][s].image[m][n])
+  );
+
+  const h22 = (
+    difference_of_gaussians[o][s].image[m + 1][n] +
+    difference_of_gaussians[o][s].image[m - 1][n] -
+    (2 * difference_of_gaussians[o][s].image[m][n])
+  );
+
+  const h33 = (
+    difference_of_gaussians[o][s].image[m][n + 1] +
+    difference_of_gaussians[o][s].image[m][n - 1] -
+    (2 * difference_of_gaussians[o][s].image[m][n])
+  );
+
+  const h12 = (
+    difference_of_gaussians[o][s + 1].image[m + 1][n] -
+    difference_of_gaussians[o][s + 1].image[m - 1][n] -
+    difference_of_gaussians[o][s - 1].image[m + 1][n] +
+    difference_of_gaussians[o][s - 1].image[m - 1][n]
+  ) / 4;
+
+  const h13 = (
+    difference_of_gaussians[o][s + 1].image[m][n + 1] -
+    difference_of_gaussians[o][s + 1].image[m][n - 1] -
+    difference_of_gaussians[o][s - 1].image[m][n + 1] +
+    difference_of_gaussians[o][s - 1].image[m][n - 1]
+  ) / 4;
+
+  const h23 = (
+    difference_of_gaussians[o][s].image[m + 1][n + 1] -
+    difference_of_gaussians[o][s].image[m + 1][n - 1] -
+    difference_of_gaussians[o][s].image[m - 1][n + 1] +
+    difference_of_gaussians[o][s].image[m - 1][n - 1]
+  ) / 4;
+
+
+  /**
+   * The Hessian Matrix has the following schema :
+   * 
+   *  +-----0---1---2--> columns
+   *  |    
+   *  |  +-           -+
+   *  0  | h11 h12 h13 |
+   *  1  | h12 h22 h23 |
+   *  2  | h13 h23 h33 |
+   *  |  +-           -+
+   *  |
+   *  v
+   * rows
+   * 
+   */
+  return [
+
+    //Column 0
+    [h11, h12, h13],
+
+    //Column 1
+    [h12, h22, h23],
+
+    //Column 2
+    [h13, h23, h33],
+  ];
+
+}

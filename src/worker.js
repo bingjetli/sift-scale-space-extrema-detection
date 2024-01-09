@@ -83,6 +83,8 @@ export function workerRefineCandidateKeypoints(
   candidate_keypoints,
   scales_per_octave,
   number_of_octaves,
+  min_blur_level,
+  min_interpixel_distance = 0.5,
 ) {
   worker.postMessage({
     type: WorkerMessageTypes.REFINE_CANDIDATE_KEYPOINTS,
@@ -90,5 +92,7 @@ export function workerRefineCandidateKeypoints(
     scalesPerOctave: scales_per_octave,
     candidateKeypoints: candidate_keypoints,
     numberOfOctaves: number_of_octaves,
+    minInterpixelDistance: min_interpixel_distance,
+    minBlurLevel: min_blur_level,
   });
 }

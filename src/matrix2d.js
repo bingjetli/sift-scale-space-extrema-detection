@@ -539,3 +539,25 @@ export function Matrix2D_vectorMultiply(matrix, vector) {
 
   return output_vector;
 }
+
+
+
+
+export function Matrix2D_getTrace(matrix) {
+
+  //The `trace` of a matrix is defined as the sum of the diagonal
+  //elements. The trace can only be performed on square matrices, so
+  //first, we'll check if the input matrix is a square matrix.
+  const [_rows, _columns] = Matrix2D_getDimensions(matrix);
+  if (_rows !== _columns) return null;
+
+
+  let sum = 0;
+  for (let i = 0; i < _rows; i++) {
+    sum += matrix[i][i];
+  }
+
+
+  //Return the sum of the diagonal elements.
+  return sum;
+}

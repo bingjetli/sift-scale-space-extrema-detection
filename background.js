@@ -461,6 +461,10 @@ function refineCandidateKeypoints({
   minInterpixelDistance = 0.5,
 }) {
 
+  //Create and initialize the list of refined candidate keypoints.
+  const refined_keypoints = [];
+
+
   for (let octave = 0; octave < numberOfOctaves; octave++) {
     for (let scale_i = 0; scale_i < scalesPerOctave; scale_i++) {
 
@@ -568,6 +572,8 @@ function refineCandidateKeypoints({
             const threshold = ((Math.pow(2, 1 / scalesPerOctave) - 1) / (Math.pow(2, 1 / 3) - 1)) * 0.015;
 
 
+            //Filter the interpolated keypoint again to remove low contrast
+            //keypoints.
             if (Math.abs(interpolated_value) >= threshold) {
 
               //If the interpolated value passes the threshold, then we
@@ -579,6 +585,19 @@ function refineCandidateKeypoints({
               const absolute_x = octave_interpixel_distance * (interpolation_offset[2] + n);
               const absolute_sigma = (octave_interpixel_distance / minInterpixelDistance) * minBlurLevel * Math.pow(2, (interpolation_offset[0] + s) / scalesPerOctave);
               console.log(`Keypoint found at (${absolute_x}, ${absolute_y}) with absolute sigma : ${absolute_sigma}`);
+
+
+              //Add this interpolated keypoint to the list of refined keypoints.
+              refined_keypoints.push({
+                octave: octave,
+                scaleLevel: s,
+                localX: n,
+                localY: m,
+                absoluteSigma: absolute_sigma,
+                absoluteX: absolute_x,
+                absoluteY: absolute_y,
+                interpolatedValue: interpolated_value,
+              });
             }
             else {
 
@@ -636,4 +655,11 @@ function refineCandidateKeypoints({
 
     }
   }
+
+
+  //Send the refined keypoints back to the main thread.
+  postMessage({
+    type: WorkerMessageTypes.RECEIVED_REFINED_KEYPOINTS,
+    refinedKeypoints: refined_keypoints,
+  });
 }

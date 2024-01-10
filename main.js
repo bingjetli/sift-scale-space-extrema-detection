@@ -183,6 +183,11 @@ function onBackgroundThreadRespond(event) {
       break;
 
 
+    case WorkerMessageTypes.RECEIVED_REFINED_KEYPOINTS:
+      onReceivedRefinedKeypoints(event.data);
+      break;
+
+
     default:
       console.log('main.js received the following :');
       console.log(event.data);
@@ -325,6 +330,42 @@ function onReceiveCandidateKeypoints({ candidateKeypoints }) {
     MAX_OCTAVES,
     INITIAL_BLUR,
   );
+}
+
+
+
+
+function onReceivedRefinedKeypoints({ refinedKeypoints }) {
+
+  //Resize the main canvas to the input image.
+  const [_height, _width] = Matrix2D_getDimensions(input_image);
+  main_canvas.width = _width;
+  main_canvas.height = _height;
+
+
+  //Repaint the main canvas with the input image.
+  main_canvas_context.putImageData(ImageUtils_convertMatrix2DToImageData(
+    _width,
+    _height,
+    { grayChannelMatrix: input_image },
+  ), 0, 0);
+
+
+  //Paint all the refined keypoints to the main canvas.
+  main_canvas_context.strokeStyle = 'yellow';
+  refinedKeypoints.forEach(keypoint => {
+    main_canvas_context.beginPath();
+    main_canvas_context.arc(
+      keypoint.absoluteX,
+      keypoint.absoluteY,
+      keypoint.absoluteSigma,
+      0,
+      Math.PI * 2,
+    );
+    main_canvas_context.closePath();
+    main_canvas_context.stroke();
+  });
+
 }
 
 

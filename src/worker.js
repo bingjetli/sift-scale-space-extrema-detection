@@ -20,6 +20,7 @@ export const WorkerMessageTypes = {
   RECEIVED_CANDIDATE_KEYPOINTS: 'received-candidate-keypoints',
 
   REFINE_CANDIDATE_KEYPOINTS: 'refine-candidate-keypoints',
+  RECEIVED_REFINED_KEYPOINTS: 'received-refined-keypoints',
 };
 
 

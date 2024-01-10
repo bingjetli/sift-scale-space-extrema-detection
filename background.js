@@ -2,7 +2,7 @@
 'use strict';
 
 import { ImageUtils_convertMatrix2DToImageData, ImageUtils_generateChunkBoundaries } from './src/image-utils.js';
-import { Matrix2D_build, Matrix2D_get3x3Inverse, Matrix2D_getDimensions, Matrix2D_linearResize, Matrix2D_sampledNormalize, Matrix2D_scalarMultiply, Matrix2D_sigmoidNormalize, Matrix2D_vectorMultiply } from './src/matrix2d.js';
+import { Matrix2D_build, Matrix2D_get2x2Determinant, Matrix2D_get3x3Inverse, Matrix2D_getDimensions, Matrix2D_getMinorMatrix, Matrix2D_getTrace, Matrix2D_linearResize, Matrix2D_sampledNormalize, Matrix2D_scalarMultiply, Matrix2D_sigmoidNormalize, Matrix2D_vectorMultiply } from './src/matrix2d.js';
 import { SIFT_blurMatrix2DChunk, SIFT_findExtremas, SIFT_generateGradientVector, SIFT_generateHessianMatrix, SIFT_subtractMatrix2DChunk } from './src/sift.js';
 import { WorkerMessageTypes } from './src/worker.js';
 
@@ -574,38 +574,58 @@ function refineCandidateKeypoints({
 
             //Filter the interpolated keypoint again to remove low contrast
             //keypoints.
-            if (Math.abs(interpolated_value) >= threshold) {
-
-              //If the interpolated value passes the threshold, then we
-              //can calculate the keypoint's absolute coordinates and add 
-              //it to the list of interpolated keypoints.
-              is_discarded = false;
-              const octave_interpixel_distance = Math.pow(2, octave - 1);
-              const absolute_y = octave_interpixel_distance * (interpolation_offset[1] + m);
-              const absolute_x = octave_interpixel_distance * (interpolation_offset[2] + n);
-              const absolute_sigma = (octave_interpixel_distance / minInterpixelDistance) * minBlurLevel * Math.pow(2, (interpolation_offset[0] + s) / scalesPerOctave);
-              console.log(`Keypoint found at (${absolute_x}, ${absolute_y}) with absolute sigma : ${absolute_sigma}`);
-
-
-              //Add this interpolated keypoint to the list of refined keypoints.
-              refined_keypoints.push({
-                octave: octave,
-                scaleLevel: s,
-                localX: n,
-                localY: m,
-                absoluteSigma: absolute_sigma,
-                absoluteX: absolute_x,
-                absoluteY: absolute_y,
-                interpolatedValue: interpolated_value,
-              });
-            }
-            else {
+            if (Math.abs(interpolated_value) < threshold) {
 
               //Otherwise, if it fails, then it is discarded due to 
               //being a low contrast keypoint.
               console.log(`interpolated keypoint at Octave ${octave}, Scale ${s}, ( ${n}, ${m}) failed to pass the contrast threshold test with a value of ${interpolated_value}.`);
+              break;
             }
 
+
+            //Filter the interpolated keypoint to remove edge responses.
+            //To remove edge responses, we need to calculate the eigenvalue
+            //ratio of the Hessian Matrix.
+            const bottom_right_hessian_matrix = Matrix2D_getMinorMatrix(
+              hessian_matrix, 0, 0
+            );
+            const bottom_right_hessian_trace = Matrix2D_getTrace(bottom_right_hessian_matrix);
+            const bottom_right_hessian_determinant = Matrix2D_get2x2Determinant(bottom_right_hessian_matrix);
+            const edgeness = (bottom_right_hessian_trace * bottom_right_hessian_trace) / bottom_right_hessian_determinant;
+            //There is another magic number threshold, where `c_edge` is
+            //set to 10, and the threshold comparison value is given by
+            //`(c_edge + 1)^2 / c_edge`
+            const edge_threshold = ((10 + 1) * (10 + 1)) / 10;
+            if (edgeness > edge_threshold) {
+
+              //If it fails the edge threshold test, then it is discarded.
+              console.log(`interpolated keypoint at Octave ${octave}, Scale ${s}, ( ${n}, ${m}) failed to pass the edge threshold test with a value of ${edgeness}.`);
+              break;
+            }
+
+
+            //If the interpolated value passes all tests, then we
+            //can calculate the keypoint's absolute coordinates and add 
+            //it to the list of interpolated keypoints.
+            is_discarded = false;
+            const octave_interpixel_distance = Math.pow(2, octave - 1);
+            const absolute_y = octave_interpixel_distance * (interpolation_offset[1] + m);
+            const absolute_x = octave_interpixel_distance * (interpolation_offset[2] + n);
+            const absolute_sigma = (octave_interpixel_distance / minInterpixelDistance) * minBlurLevel * Math.pow(2, (interpolation_offset[0] + s) / scalesPerOctave);
+            console.log(`Keypoint found at (${absolute_x}, ${absolute_y}) with absolute sigma : ${absolute_sigma}`);
+
+
+            //Add this interpolated keypoint to the list of refined keypoints.
+            refined_keypoints.push({
+              octave: octave,
+              scaleLevel: s,
+              localX: n,
+              localY: m,
+              absoluteSigma: absolute_sigma,
+              absoluteX: absolute_x,
+              absoluteY: absolute_y,
+              interpolatedValue: interpolated_value,
+            });
 
             break;
           }

@@ -8,7 +8,7 @@ This is an implementation of the Scale Invariant Feature Transform detection alg
 
 &nbsp;  
 
-Currently, the algorithm is only partially implemented up to the candidate keypoint detection phase. 
+Currently, the algorithm is implemented up to the keypoint detection and interpolation / refining phase.  
  
 &nbsp;  
 
